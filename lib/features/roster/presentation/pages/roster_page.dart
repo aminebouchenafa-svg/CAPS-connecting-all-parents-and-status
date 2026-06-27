@@ -9,7 +9,8 @@ import '../../domain/entities/roster_duty.dart';
 import '../providers/roster_provider.dart';
 import '../widgets/roster_upload_widget.dart';
 
-const _dayNames = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+const _dayNames = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+const _dayNamesFull = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 
 class RosterPage extends ConsumerWidget {
   const RosterPage({super.key});
@@ -25,20 +26,19 @@ class RosterPage extends ConsumerWidget {
           if (roster != null) ...[
             IconButton(
               icon: const Icon(Icons.swap_horiz),
-              tooltip: 'Remplacer le roster',
+              tooltip: 'Remplacer',
               onPressed: () => _showUploadSheet(context),
             ),
             IconButton(
               icon: const Icon(Icons.delete_outline),
-              tooltip: 'Effacer le roster',
+              tooltip: 'Effacer',
               onPressed: () async {
                 final confirm = await showDialog<bool>(
                   context: context,
                   builder: (ctx) => AlertDialog(
                     title: const Text('Effacer le roster ?'),
                     content: const Text(
-                      'Le roster actuel sera supprimé. '
-                      'Vous pourrez en charger un nouveau ensuite.',
+                      'Le roster actuel sera supprimé.',
                     ),
                     actions: [
                       TextButton(
@@ -47,9 +47,7 @@ class RosterPage extends ConsumerWidget {
                       ),
                       TextButton(
                         onPressed: () => Navigator.pop(ctx, true),
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.red,
-                        ),
+                        style: TextButton.styleFrom(foregroundColor: Colors.red),
                         child: const Text('Effacer'),
                       ),
                     ],
@@ -119,133 +117,407 @@ class _EmptyRoster extends StatelessWidget {
   }
 }
 
-class _RosterContent extends StatelessWidget {
+class _RosterContent extends ConsumerWidget {
   final Roster roster;
 
   const _RosterContent({required this.roster});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notes = ref.watch(dutyNotesProvider);
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Header
+          // Header compact
           CapsCard(
             backgroundColor: AppColors.primary.withValues(alpha: 0.08),
-            child: Column(
+            child: Row(
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.person, size: 20, color: AppColors.primary),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Text(
-                        roster.pilotName.isNotEmpty
-                            ? roster.pilotName
-                            : 'Pilote',
-                        style: AppTextStyles.heading2,
-                        textAlign: TextAlign.center,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        roster.pilotName.isNotEmpty ? roster.pilotName : 'Pilote',
+                        style: AppTextStyles.bodyBold,
                       ),
-                    ),
-                  ],
+                      Text(
+                        '${roster.aircraft} • Base ${roster.base}',
+                        style: AppTextStyles.caption,
+                      ),
+                    ],
+                  ),
                 ),
-                if (roster.pilotId.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    'ID ${roster.pilotId}',
-                    style: AppTextStyles.caption.copyWith(
-                      color: Colors.grey,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 6),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 4,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: AppColors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    '${roster.aircraft} • Base ${roster.base}',
-                    style: AppTextStyles.bodyBold.copyWith(
+                    '${_formatDate(roster.periodStart)} — ${_formatDate(roster.periodEnd)}',
+                    style: AppTextStyles.caption.copyWith(
                       color: AppColors.primary,
+                      fontWeight: FontWeight.w600,
                     ),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '${_formatDate(roster.periodStart)} — ${_formatDate(roster.periodEnd)}',
-                  style: AppTextStyles.caption.copyWith(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
 
-          // Stats
+          // Stats row
           Row(
             children: [
-              _StatChip(
-                label: 'Vols',
-                value: '${roster.flightDays}j',
-                color: AppColors.statusEnVol,
-              ),
-              const SizedBox(width: 8),
-              _StatChip(
-                label: 'Repos',
-                value: '${roster.offDays}j',
-                color: AppColors.statusRepos,
-              ),
-              const SizedBox(width: 8),
-              _StatChip(
-                label: 'Block',
-                value: '${roster.totalBlockHours.toStringAsFixed(0)}h',
-                color: AppColors.accent,
-              ),
-              const SizedBox(width: 8),
-              _StatChip(
-                label: 'Atterr.',
-                value: '${roster.totalLandings}',
-                color: AppColors.primary,
-              ),
+              _StatChip(label: 'Vols', value: '${roster.flightDays}j', color: AppColors.statusEnVol),
+              const SizedBox(width: 6),
+              _StatChip(label: 'Repos', value: '${roster.offDays}j', color: AppColors.statusRepos),
+              const SizedBox(width: 6),
+              _StatChip(label: 'Block', value: '${roster.totalBlockHours.toStringAsFixed(0)}h', color: AppColors.accent),
+              const SizedBox(width: 6),
+              _StatChip(label: 'Atterr.', value: '${roster.totalLandings}', color: AppColors.primary),
             ],
           ),
           const SizedBox(height: 16),
 
-          // Duties list
-          Text('Planning détaillé', style: AppTextStyles.heading3),
-          const SizedBox(height: 8),
-          ...roster.duties.map((duty) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: _DutyCard(duty: duty),
-              )),
+          // Calendar grid
+          _buildCalendarGrid(context, ref, notes),
+          const SizedBox(height: 12),
 
-          if (roster.duties.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                'Le parsing du roster est en cours d\'amélioration. '
-                'Les statistiques sont correctes, le détail jour par jour arrive bientôt.',
-                style: AppTextStyles.caption.copyWith(color: Colors.grey),
-                textAlign: TextAlign.center,
-              ),
-            ),
+          // Legend
+          _buildLegend(),
+          const SizedBox(height: 80),
         ],
       ),
     );
   }
 
+  Widget _buildCalendarGrid(BuildContext context, WidgetRef ref, Map<String, String> notes) {
+    final start = roster.periodStart;
+    final end = roster.periodEnd;
+    final daysInMonth = end.day;
+
+    // Day name headers
+    final firstDayWeekday = DateTime(start.year, start.month, 1).weekday;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Programme du mois', style: AppTextStyles.heading3),
+        const SizedBox(height: 8),
+
+        // Weekday headers
+        Row(
+          children: List.generate(7, (i) => Expanded(
+            child: Center(
+              child: Text(
+                _dayNames[i],
+                style: AppTextStyles.caption.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ),
+          )),
+        ),
+        const SizedBox(height: 4),
+
+        // Calendar grid
+        ..._buildWeeks(context, ref, notes, start.year, start.month, daysInMonth, firstDayWeekday),
+      ],
+    );
+  }
+
+  List<Widget> _buildWeeks(BuildContext context, WidgetRef ref, Map<String, String> notes, int year, int month, int daysInMonth, int firstDayWeekday) {
+    final weeks = <Widget>[];
+    int day = 1;
+
+    for (int week = 0; week < 6 && day <= daysInMonth; week++) {
+      final cells = <Widget>[];
+
+      for (int weekday = 1; weekday <= 7; weekday++) {
+        if ((week == 0 && weekday < firstDayWeekday) || day > daysInMonth) {
+          cells.add(const Expanded(child: SizedBox(height: 58)));
+        } else {
+          final currentDay = day;
+          final date = DateTime(year, month, currentDay);
+          final duties = roster.dutiesForDate(date);
+          final noteKey = '${year}-${month}-${currentDay}';
+          final hasNote = notes.containsKey(noteKey);
+
+          cells.add(Expanded(
+            child: GestureDetector(
+              onTap: () => _showDayDetail(context, ref, date, duties, notes),
+              child: Container(
+                height: 58,
+                margin: const EdgeInsets.all(2),
+                decoration: BoxDecoration(
+                  color: _dayColor(duties),
+                  borderRadius: BorderRadius.circular(8),
+                  border: _isToday(date)
+                      ? Border.all(color: AppColors.primary, width: 2.5)
+                      : null,
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      '$currentDay',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: _isToday(date) ? FontWeight.w900 : FontWeight.w600,
+                        color: _dayTextColor(duties),
+                      ),
+                    ),
+                    if (duties.isNotEmpty && duties.first.isFlight)
+                      Text(
+                        _shortFlightLabel(duties.first),
+                        style: TextStyle(fontSize: 8, color: _dayTextColor(duties), fontWeight: FontWeight.w500),
+                      ),
+                    if (hasNote)
+                      Icon(Icons.comment, size: 10, color: _dayTextColor(duties).withValues(alpha: 0.7)),
+                  ],
+                ),
+              ),
+            ),
+          ));
+          day++;
+        }
+      }
+
+      weeks.add(Row(children: cells));
+    }
+
+    return weeks;
+  }
+
+  bool _isToday(DateTime date) {
+    final now = DateTime.now();
+    return date.year == now.year && date.month == now.month && date.day == now.day;
+  }
+
+  Color _dayColor(List<RosterDuty> duties) {
+    if (duties.isEmpty) return Colors.grey[100]!;
+    final type = duties.first.type;
+    return switch (type) {
+      DutyType.flight => AppColors.statusEnVol.withValues(alpha: 0.2),
+      DutyType.standby => AppColors.statusEscale.withValues(alpha: 0.2),
+      DutyType.rest || DutyType.off => AppColors.statusRepos.withValues(alpha: 0.2),
+      DutyType.training || DutyType.simulator => AppColors.statusRetour.withValues(alpha: 0.2),
+      DutyType.deadhead => AppColors.accent.withValues(alpha: 0.2),
+    };
+  }
+
+  Color _dayTextColor(List<RosterDuty> duties) {
+    if (duties.isEmpty) return Colors.grey[600]!;
+    final type = duties.first.type;
+    return switch (type) {
+      DutyType.flight => AppColors.statusEnVol,
+      DutyType.standby => AppColors.statusEscale,
+      DutyType.rest || DutyType.off => AppColors.statusRepos,
+      DutyType.training || DutyType.simulator => AppColors.statusRetour,
+      DutyType.deadhead => AppColors.accent,
+    };
+  }
+
+  String _shortFlightLabel(RosterDuty duty) {
+    if (duty.arrival != null) return duty.arrival!;
+    if (duty.flightNumber != null) return duty.flightNumber!.replaceAll('AH ', '');
+    return '';
+  }
+
+  void _showDayDetail(BuildContext context, WidgetRef ref, DateTime date, List<RosterDuty> duties, Map<String, String> existingNotes) {
+    final noteKey = '${date.year}-${date.month}-${date.day}';
+    final dayName = _dayNamesFull[date.weekday - 1];
+    final controller = TextEditingController(text: existingNotes[noteKey] ?? '');
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          left: 20, right: 20, top: 20,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            Text(
+              '$dayName ${date.day}/${date.month}/${date.year}',
+              style: AppTextStyles.heading2,
+            ),
+            const SizedBox(height: 12),
+
+            // Duty info
+            if (duties.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.event_busy, color: Colors.grey[400]),
+                    const SizedBox(width: 8),
+                    Text('Pas d\'activité programmée', style: AppTextStyles.body),
+                  ],
+                ),
+              )
+            else
+              ...duties.map((duty) => Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _dayColor([duty]),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _dayTextColor([duty]).withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 4, height: 40,
+                      decoration: BoxDecoration(
+                        color: _dayTextColor([duty]),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            duty.type.label,
+                            style: AppTextStyles.bodyBold.copyWith(
+                              color: _dayTextColor([duty]),
+                            ),
+                          ),
+                          if (duty.isFlight && duty.flightNumber != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              '${duty.flightNumber}  •  '
+                              '${RosterParser.airportName(duty.departure ?? '')} → '
+                              '${RosterParser.airportName(duty.arrival ?? '')}',
+                              style: AppTextStyles.body,
+                            ),
+                          ],
+                          if (duty.checkIn != null && duty.checkOut != null)
+                            Text(
+                              'Départ ${_formatTime(duty.checkIn!)} — Arrivée ${_formatTime(duty.checkOut!)}',
+                              style: AppTextStyles.caption.copyWith(color: Colors.grey[600]),
+                            ),
+                          if (duty.notes != null && !duty.isFlight)
+                            Text(duty.notes!, style: AppTextStyles.caption),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              )),
+
+            const SizedBox(height: 16),
+
+            // Note input
+            Text('Ma note personnelle', style: AppTextStyles.bodyBold),
+            const SizedBox(height: 8),
+            TextField(
+              controller: controller,
+              maxLines: 3,
+              decoration: InputDecoration(
+                hintText: 'Ex: Emmener les enfants au sport ce soir...',
+                hintStyle: TextStyle(color: Colors.grey[400]),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                contentPadding: const EdgeInsets.all(12),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  final text = controller.text.trim();
+                  final currentNotes = Map<String, String>.from(
+                    ref.read(dutyNotesProvider),
+                  );
+                  if (text.isEmpty) {
+                    currentNotes.remove(noteKey);
+                  } else {
+                    currentNotes[noteKey] = text;
+                  }
+                  ref.read(dutyNotesProvider.notifier).state = currentNotes;
+                  Navigator.pop(ctx);
+                },
+                icon: const Icon(Icons.save),
+                label: const Text('Enregistrer'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLegend() {
+    return Wrap(
+      spacing: 12,
+      runSpacing: 6,
+      children: [
+        _legendItem(AppColors.statusEnVol, 'Vol'),
+        _legendItem(AppColors.statusRepos, 'Repos / OFF'),
+        _legendItem(AppColors.statusEscale, 'Standby'),
+        _legendItem(AppColors.statusRetour, 'Formation'),
+      ],
+    );
+  }
+
+  Widget _legendItem(Color color, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 14, height: 14,
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.2),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: color.withValues(alpha: 0.5)),
+          ),
+        ),
+        const SizedBox(width: 4),
+        Text(label, style: const TextStyle(fontSize: 12)),
+      ],
+    );
+  }
+
   String _formatDate(DateTime dt) =>
-      '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}';
+      '${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}';
+
+  String _formatTime(DateTime dt) =>
+      '${dt.hour.toString().padLeft(2, '0')}h${dt.minute.toString().padLeft(2, '0')}';
 }
 
 class _StatChip extends StatelessWidget {
@@ -263,10 +535,10 @@ class _StatChip extends StatelessWidget {
   Widget build(BuildContext context) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
           border: Border.all(color: color.withValues(alpha: 0.3)),
         ),
         child: Column(
@@ -278,79 +550,4 @@ class _StatChip extends StatelessWidget {
       ),
     );
   }
-}
-
-class _DutyCard extends StatelessWidget {
-  final RosterDuty duty;
-
-  const _DutyCard({required this.duty});
-
-  @override
-  Widget build(BuildContext context) {
-    return CapsCard(
-      child: Row(
-        children: [
-          Container(
-            width: 4,
-            height: 48,
-            decoration: BoxDecoration(
-              color: _dutyColor(duty.type),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      '${_dayNames[duty.date.weekday - 1]} ${duty.date.day}/${duty.date.month}',
-                      style: AppTextStyles.bodyBold,
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: _dutyColor(duty.type).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        duty.type.label,
-                        style: AppTextStyles.caption.copyWith(
-                          color: _dutyColor(duty.type),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                if (duty.flightNumber != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    '${duty.flightNumber} : '
-                    '${RosterParser.airportName(duty.departure ?? '')} → '
-                    '${RosterParser.airportName(duty.arrival ?? '')}',
-                    style: AppTextStyles.caption,
-                  ),
-                ],
-                if (duty.notes != null)
-                  Text(duty.notes!, style: AppTextStyles.caption),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Color _dutyColor(DutyType type) => switch (type) {
-        DutyType.flight => AppColors.statusEnVol,
-        DutyType.standby => AppColors.statusEscale,
-        DutyType.rest || DutyType.off => AppColors.statusRepos,
-        DutyType.training || DutyType.simulator => AppColors.statusRetour,
-        DutyType.deadhead => AppColors.accent,
-      };
 }
