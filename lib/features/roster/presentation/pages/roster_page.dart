@@ -9,6 +9,8 @@ import '../../domain/entities/roster_duty.dart';
 import '../providers/roster_provider.dart';
 import '../widgets/roster_upload_widget.dart';
 
+const _dayNames = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+
 class RosterPage extends ConsumerWidget {
   const RosterPage({super.key});
 
@@ -17,7 +19,19 @@ class RosterPage extends ConsumerWidget {
     final roster = ref.watch(rosterProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Mon Roster')),
+      appBar: AppBar(
+        title: const Text('Mon Roster'),
+        actions: [
+          if (roster != null)
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Recharger',
+              onPressed: () {
+                ref.read(rosterProvider.notifier).state = null;
+              },
+            ),
+        ],
+      ),
       body: roster == null
           ? const _EmptyRoster()
           : _RosterContent(roster: roster),
@@ -88,20 +102,57 @@ class _RosterContent extends StatelessWidget {
         children: [
           // Header
           CapsCard(
-            backgroundColor: AppColors.primary.withValues(alpha: 0.05),
+            backgroundColor: AppColors.primary.withValues(alpha: 0.08),
             child: Column(
               children: [
-                Text(roster.pilotName, style: AppTextStyles.heading2),
-                const SizedBox(height: 4),
-                Text(
-                  '${roster.aircraft} • Base ${roster.base}',
-                  style: AppTextStyles.caption,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.person, size: 20, color: AppColors.primary),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        roster.pilotName.isNotEmpty
+                            ? roster.pilotName
+                            : 'Pilote',
+                        style: AppTextStyles.heading2,
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
+                if (roster.pilotId.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'ID ${roster.pilotId}',
+                    style: AppTextStyles.caption.copyWith(
+                      color: Colors.grey,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${roster.aircraft} • Base ${roster.base}',
+                    style: AppTextStyles.bodyBold.copyWith(
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
                 Text(
                   '${_formatDate(roster.periodStart)} — ${_formatDate(roster.periodEnd)}',
-                  style: AppTextStyles.bodyBold.copyWith(
+                  style: AppTextStyles.caption.copyWith(
                     color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -224,7 +275,7 @@ class _DutyCard extends StatelessWidget {
                 Row(
                   children: [
                     Text(
-                      '${duty.date.day}/${duty.date.month}',
+                      '${_dayNames[duty.date.weekday - 1]} ${duty.date.day}/${duty.date.month}',
                       style: AppTextStyles.bodyBold,
                     ),
                     const SizedBox(width: 8),

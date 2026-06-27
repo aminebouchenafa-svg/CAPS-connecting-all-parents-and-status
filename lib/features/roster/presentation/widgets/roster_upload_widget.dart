@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/constants/demo_data.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../data/roster_parser.dart';
@@ -20,7 +21,30 @@ class RosterUploadWidget extends ConsumerStatefulWidget {
 class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
   bool _loading = false;
   String? _error;
-  String? _fileName;
+
+  void _loadDemoRoster() {
+    ref.read(rosterProvider.notifier).state = DemoData.demoRoster;
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Roster de ${DemoData.demoRoster.pilotName} chargé !',
+        ),
+        backgroundColor: AppColors.success,
+      ),
+    );
+  }
+
+  bool _isPdfBinary(Uint8List bytes) {
+    if (bytes.length >= 4) {
+      // PDF files start with %PDF
+      return bytes[0] == 0x25 &&
+          bytes[1] == 0x50 &&
+          bytes[2] == 0x44 &&
+          bytes[3] == 0x46;
+    }
+    return false;
+  }
 
   Future<void> _pickAndParseFile() async {
     setState(() {
@@ -31,7 +55,7 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['txt', 'csv', 'pdf'],
+        allowedExtensions: ['txt', 'csv'],
         withData: true,
       );
 
@@ -41,12 +65,26 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
       }
 
       final file = result.files.first;
-      _fileName = file.name;
-
       final Uint8List? bytes = file.bytes;
-      if (bytes == null) {
+
+      if (bytes == null || bytes.isEmpty) {
         setState(() {
           _error = 'Impossible de lire le fichier.';
+          _loading = false;
+        });
+        return;
+      }
+
+      if (_isPdfBinary(bytes)) {
+        setState(() {
+          _error =
+              'Les fichiers PDF ne peuvent pas être lus directement '
+              'dans le navigateur.\n\n'
+              'Utilisez plutôt le bouton "Coller le texte" :\n'
+              '1. Ouvrez le PDF dans un lecteur\n'
+              '2. Sélectionnez tout (Ctrl+A)\n'
+              '3. Copiez (Ctrl+C)\n'
+              '4. Collez ici';
           _loading = false;
         });
         return;
@@ -56,11 +94,7 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
 
       if (text.trim().isEmpty) {
         setState(() {
-          _error =
-              'Le fichier semble vide ou est un PDF binaire.\n\n'
-              'Astuce : ouvrez votre roster eCrew dans un navigateur, '
-              'sélectionnez tout le texte (Ctrl+A), copiez-le, '
-              'puis collez-le dans un fichier .txt et uploadez ce fichier.';
+          _error = 'Le fichier semble vide.';
           _loading = false;
         });
         return;
@@ -105,8 +139,9 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
             textAlignVertical: TextAlignVertical.top,
             decoration: const InputDecoration(
               hintText:
-                  'Copiez le contenu de votre roster eCrew '
-                  'et collez-le ici...',
+                  'Ouvrez votre roster eCrew en PDF,\n'
+                  'sélectionnez tout le texte (Ctrl+A),\n'
+                  'copiez (Ctrl+C), puis collez ici...',
               border: OutlineInputBorder(),
             ),
           ),
@@ -178,7 +213,7 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
           Text('Importer mon roster', style: AppTextStyles.heading2),
           const SizedBox(height: 8),
           Text(
-            'Importez votre planning eCrew pour voir '
+            'Chargez votre planning eCrew pour voir '
             'vos rotations dans l\'application.',
             style: AppTextStyles.caption.copyWith(color: Colors.grey),
             textAlign: TextAlign.center,
@@ -191,36 +226,61 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
               child: CircularProgressIndicator(),
             )
           else ...[
+            // Primary action: load demo roster
             SizedBox(
               width: double.infinity,
               child: ElevatedButton.icon(
-                onPressed: _pickAndParseFile,
-                icon: const Icon(Icons.upload_file),
-                label: const Text('Choisir un fichier (.txt)'),
+                onPressed: _loadDemoRoster,
+                icon: const Icon(Icons.flight_takeoff),
+                label: const Text('Charger mon roster Juin 2026'),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
                 ),
               ),
             ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _pasteRosterText,
-                icon: const Icon(Icons.paste),
-                label: const Text('Coller le texte du roster'),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-              ),
-            ),
-          ],
+            const SizedBox(height: 16),
 
-          if (_fileName != null) ...[
-            const SizedBox(height: 12),
-            Text(
-              'Fichier : $_fileName',
-              style: AppTextStyles.caption,
+            Row(
+              children: [
+                const Expanded(child: Divider()),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    'ou importer manuellement',
+                    style: AppTextStyles.caption.copyWith(color: Colors.grey),
+                  ),
+                ),
+                const Expanded(child: Divider()),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _pickAndParseFile,
+                    icon: const Icon(Icons.upload_file, size: 18),
+                    label: const Text('Fichier .txt'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _pasteRosterText,
+                    icon: const Icon(Icons.paste, size: 18),
+                    label: const Text('Coller texte'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
 
@@ -254,8 +314,9 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Astuce : depuis eCrew, exportez votre roster '
-                    'puis copiez-collez le texte ici.',
+                    'Le PDF ne peut pas être lu directement. '
+                    'Utilisez "Coller texte" pour copier-coller '
+                    'le contenu de votre roster eCrew.',
                     style: AppTextStyles.caption.copyWith(
                       color: AppColors.primary,
                     ),

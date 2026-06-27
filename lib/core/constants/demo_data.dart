@@ -1,6 +1,7 @@
 import '../../features/auth/domain/entities/app_user.dart';
 import '../../features/calendar/domain/entities/calendar_event.dart';
 import '../../features/dashboard/domain/entities/flight_status.dart';
+import '../../features/roster/domain/entities/roster_duty.dart';
 
 abstract final class DemoData {
   static const String householdId = 'famille-bouchenafa';
@@ -122,4 +123,52 @@ abstract final class DemoData {
           createdAt: DateTime.now(),
         ),
       ];
+
+  static Roster get demoRoster => Roster(
+        pilotName: 'BOUCHENAFA Mohamed Amine',
+        pilotId: '30048',
+        base: 'ALG',
+        aircraft: 'B738',
+        periodStart: DateTime(2026, 6, 1),
+        periodEnd: DateTime(2026, 6, 30),
+        totalBlockHours: 53.73,
+        totalDutyHours: 97.47,
+        totalLandings: 21,
+        offDays: 13,
+        flightDays: 10,
+        duties: [
+          RosterDuty(date: DateTime(2026, 6, 1), type: DutyType.flight, flightNumber: 'AH 1069', departure: 'ALG', arrival: 'IST'),
+          RosterDuty(date: DateTime(2026, 6, 2), type: DutyType.flight, flightNumber: 'AH 1070', departure: 'IST', arrival: 'ALG'),
+          RosterDuty(date: DateTime(2026, 6, 3), type: DutyType.off, notes: 'Repos'),
+          RosterDuty(date: DateTime(2026, 6, 4), type: DutyType.off, notes: 'Repos'),
+          RosterDuty(date: DateTime(2026, 6, 5), type: DutyType.flight, flightNumber: 'AH 3017', departure: 'ALG', arrival: 'CDG'),
+          RosterDuty(date: DateTime(2026, 6, 6), type: DutyType.flight, flightNumber: 'AH 3018', departure: 'CDG', arrival: 'ALG'),
+          RosterDuty(date: DateTime(2026, 6, 7), type: DutyType.off, notes: 'Repos'),
+          RosterDuty(date: DateTime(2026, 6, 8), type: DutyType.off, notes: 'Repos'),
+          RosterDuty(date: DateTime(2026, 6, 9), type: DutyType.flight, flightNumber: 'AH 4002', departure: 'ALG', arrival: 'MXP'),
+          RosterDuty(date: DateTime(2026, 6, 9), type: DutyType.flight, flightNumber: 'AH 4003', departure: 'MXP', arrival: 'ALG'),
+          RosterDuty(date: DateTime(2026, 6, 10), type: DutyType.off, notes: 'Repos'),
+          RosterDuty(date: DateTime(2026, 6, 11), type: DutyType.flight, flightNumber: 'AH 1069', departure: 'ALG', arrival: 'IST'),
+          RosterDuty(date: DateTime(2026, 6, 12), type: DutyType.flight, flightNumber: 'AH 1070', departure: 'IST', arrival: 'ALG'),
+          RosterDuty(date: DateTime(2026, 6, 13), type: DutyType.off, notes: 'Repos'),
+          RosterDuty(date: DateTime(2026, 6, 14), type: DutyType.off, notes: 'Repos'),
+          RosterDuty(date: DateTime(2026, 6, 15), type: DutyType.flight, flightNumber: 'AH 6120', departure: 'ALG', arrival: 'ORY'),
+          RosterDuty(date: DateTime(2026, 6, 16), type: DutyType.flight, flightNumber: 'AH 6121', departure: 'ORY', arrival: 'ALG'),
+          RosterDuty(date: DateTime(2026, 6, 17), type: DutyType.off, notes: 'Repos'),
+          RosterDuty(date: DateTime(2026, 6, 18), type: DutyType.off, notes: 'Repos'),
+          RosterDuty(date: DateTime(2026, 6, 19), type: DutyType.off, notes: 'Repos'),
+          RosterDuty(date: DateTime(2026, 6, 20), type: DutyType.flight, flightNumber: 'AH 2014', departure: 'ALG', arrival: 'TUN'),
+          RosterDuty(date: DateTime(2026, 6, 20), type: DutyType.flight, flightNumber: 'AH 2015', departure: 'TUN', arrival: 'ALG'),
+          RosterDuty(date: DateTime(2026, 6, 21), type: DutyType.off, notes: 'Repos'),
+          RosterDuty(date: DateTime(2026, 6, 22), type: DutyType.flight, flightNumber: 'AH 3017', departure: 'ALG', arrival: 'CDG'),
+          RosterDuty(date: DateTime(2026, 6, 23), type: DutyType.flight, flightNumber: 'AH 3018', departure: 'CDG', arrival: 'ALG'),
+          RosterDuty(date: DateTime(2026, 6, 24), type: DutyType.off, notes: 'Repos'),
+          RosterDuty(date: DateTime(2026, 6, 25), type: DutyType.off, notes: 'Repos'),
+          RosterDuty(date: DateTime(2026, 6, 26), type: DutyType.flight, flightNumber: 'AH 1069', departure: 'ALG', arrival: 'IST'),
+          RosterDuty(date: DateTime(2026, 6, 27), type: DutyType.flight, flightNumber: 'AH 1070', departure: 'IST', arrival: 'ALG'),
+          RosterDuty(date: DateTime(2026, 6, 28), type: DutyType.off, notes: 'Repos'),
+          RosterDuty(date: DateTime(2026, 6, 29), type: DutyType.standby, notes: 'Standby'),
+          RosterDuty(date: DateTime(2026, 6, 30), type: DutyType.standby, notes: 'Standby'),
+        ],
+      );
 }
