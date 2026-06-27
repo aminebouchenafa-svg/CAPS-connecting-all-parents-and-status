@@ -1,9 +1,9 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 import '../../../../core/constants/demo_data.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -21,37 +21,54 @@ class RosterUploadWidget extends ConsumerStatefulWidget {
 class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
   bool _loading = false;
   String? _error;
-  final _textController = TextEditingController();
 
-  @override
-  void dispose() {
-    _textController.dispose();
-    super.dispose();
+  String _extractTextFromPdf(Uint8List bytes) {
+    final document = PdfDocument(inputBytes: bytes);
+    final extractor = PdfTextExtractor(document);
+    final text = extractor.extractText();
+    document.dispose();
+    return text;
   }
 
-  void _loadDemoRoster() {
-    ref.read(rosterProvider.notifier).state = DemoData.demoRoster;
-    Navigator.of(context).pop();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Roster démo Juin 2026 chargé !'),
-        backgroundColor: AppColors.success,
-      ),
-    );
-  }
-
-  void _parseAndLoad(String text) {
-    if (text.trim().isEmpty) {
-      setState(() => _error = 'Le texte est vide.');
-      return;
-    }
-
+  Future<void> _pickAndLoadPdf() async {
     setState(() {
       _loading = true;
       _error = null;
     });
 
     try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf'],
+        withData: true,
+      );
+
+      if (result == null || result.files.isEmpty) {
+        setState(() => _loading = false);
+        return;
+      }
+
+      final file = result.files.first;
+      final Uint8List? bytes = file.bytes;
+
+      if (bytes == null || bytes.isEmpty) {
+        setState(() {
+          _error = 'Impossible de lire le fichier.';
+          _loading = false;
+        });
+        return;
+      }
+
+      final text = _extractTextFromPdf(bytes);
+
+      if (text.trim().isEmpty) {
+        setState(() {
+          _error = 'Aucun texte trouvé dans le PDF.';
+          _loading = false;
+        });
+        return;
+      }
+
       final parser = ref.read(rosterParserProvider);
       final roster = parser.parse(text);
 
@@ -68,53 +85,21 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
       }
     } catch (e) {
       setState(() {
-        _error = 'Erreur lors du parsing : $e';
+        _error = 'Erreur : $e';
         _loading = false;
       });
     }
   }
 
-  Future<void> _pickTextFile() async {
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['txt', 'csv'],
-        withData: true,
-      );
-
-      if (result == null || result.files.isEmpty) return;
-
-      final bytes = result.files.first.bytes;
-      if (bytes == null || bytes.isEmpty) {
-        setState(() => _error = 'Impossible de lire le fichier.');
-        return;
-      }
-
-      if (_isPdfBinary(bytes)) {
-        setState(() {
-          _error =
-              'Les PDF ne peuvent pas être lus dans le navigateur.\n'
-              'Ouvrez le PDF, sélectionnez tout le texte, '
-              'copiez-le et collez-le dans la zone ci-dessus.';
-        });
-        return;
-      }
-
-      final text = utf8.decode(bytes, allowMalformed: true);
-      _parseAndLoad(text);
-    } catch (e) {
-      setState(() => _error = 'Erreur : $e');
-    }
-  }
-
-  bool _isPdfBinary(Uint8List bytes) {
-    if (bytes.length >= 4) {
-      return bytes[0] == 0x25 &&
-          bytes[1] == 0x50 &&
-          bytes[2] == 0x44 &&
-          bytes[3] == 0x46;
-    }
-    return false;
+  void _loadDemoRoster() {
+    ref.read(rosterProvider.notifier).state = DemoData.demoRoster;
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Roster démo Juin 2026 chargé !'),
+        backgroundColor: AppColors.success,
+      ),
+    );
   }
 
   @override
@@ -123,15 +108,14 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
 
     return Padding(
       padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 16,
-        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+        left: 24,
+        right: 24,
+        top: 24,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Handle bar
           Container(
             width: 40,
             height: 4,
@@ -140,114 +124,76 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
+
+          Icon(
+            Icons.upload_file,
+            size: 48,
+            color: AppColors.primary,
+          ),
+          const SizedBox(height: 12),
 
           Text(
             hasRoster ? 'Remplacer le roster' : 'Importer mon roster',
             style: AppTextStyles.heading2,
           ),
           const SizedBox(height: 8),
-
-          // Instructions
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              children: [
-                Text(
-                  'Comment importer votre roster eCrew :',
-                  style: AppTextStyles.bodyBold.copyWith(
-                    color: AppColors.primary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                _buildStep('1', 'Ouvrez votre roster PDF'),
-                _buildStep('2', 'Sélectionnez tout le texte'),
-                _buildStep('3', 'Copiez-le'),
-                _buildStep('4', 'Collez-le ci-dessous'),
-              ],
-            ),
+          Text(
+            'Sélectionnez votre fichier PDF eCrew\ndepuis vos fichiers.',
+            style: AppTextStyles.caption.copyWith(color: Colors.grey),
+            textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
 
           if (_loading)
             const Padding(
-              padding: EdgeInsets.all(24),
-              child: CircularProgressIndicator(),
+              padding: EdgeInsets.all(32),
+              child: Column(
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 12),
+                  Text('Lecture du PDF en cours...'),
+                ],
+              ),
             )
           else ...[
-            // Text input area
-            SizedBox(
-              height: 150,
-              child: TextField(
-                controller: _textController,
-                maxLines: null,
-                expands: true,
-                textAlignVertical: TextAlignVertical.top,
-                style: const TextStyle(fontSize: 13),
-                decoration: InputDecoration(
-                  hintText: 'Collez le texte de votre roster ici...',
-                  hintStyle: TextStyle(color: Colors.grey[400]),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  contentPadding: const EdgeInsets.all(12),
-                ),
-              ),
-            ),
-            const SizedBox(height: 12),
-
-            // Import button
+            // Big blue button
             SizedBox(
               width: double.infinity,
+              height: 56,
               child: ElevatedButton.icon(
-                onPressed: () => _parseAndLoad(_textController.text),
-                icon: const Icon(Icons.upload_file),
-                label: const Text('Importer le roster'),
+                onPressed: _pickAndLoadPdf,
+                icon: const Icon(Icons.picture_as_pdf, size: 24),
+                label: const Text(
+                  'Charger mon roster (PDF)',
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+                ),
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
 
-            // Secondary options
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _pickTextFile,
-                    icon: const Icon(Icons.file_open, size: 18),
-                    label: const Text('Fichier .txt'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _loadDemoRoster,
-                    icon: const Icon(Icons.auto_awesome, size: 18),
-                    label: const Text('Roster démo'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                ),
-              ],
+            // Demo option
+            TextButton.icon(
+              onPressed: _loadDemoRoster,
+              icon: Icon(Icons.auto_awesome, size: 16, color: Colors.grey[600]),
+              label: Text(
+                'Charger le roster démo',
+                style: AppTextStyles.caption.copyWith(color: Colors.grey[600]),
+              ),
             ),
           ],
 
           if (_error != null) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             Container(
-              padding: const EdgeInsets.all(10),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.red.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
@@ -260,38 +206,6 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
               ),
             ),
           ],
-
-          const SizedBox(height: 8),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStep(String number, String text) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
-        children: [
-          Container(
-            width: 22,
-            height: 22,
-            decoration: BoxDecoration(
-              color: AppColors.primary,
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(
-                number,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(text, style: AppTextStyles.body),
         ],
       ),
     );
