@@ -279,9 +279,21 @@ class RosterParser {
       dataLines.add(line);
     }
 
-    // Step 5: Extract airport rows and map to flight days
-    // Airport rows are lines where majority of tokens are 3-letter codes.
-    // They appear in pairs: departure row then arrival row.
+    // Step 5: Build list of "active" day indices — days that have airport
+    // data in the grid. This includes flights AND activities like ESIM
+    // (simulator abroad), DEPL (deployment), ARRT (late arrival).
+    const airportActivities = {'ESIM', 'DEPL', 'ARRT'};
+    final activeDayIndices = <int>[];
+    for (final entry in dayActivities.entries) {
+      final upper = entry.value;
+      if (_extractFlightNum(upper) != null ||
+          airportActivities.contains(upper)) {
+        activeDayIndices.add(entry.key);
+      }
+    }
+    activeDayIndices.sort();
+
+    // Step 6: Extract airport rows (lines with mostly 3-letter codes)
     final airportRows = <List<String>>[];
     for (final dl in dataLines) {
       final tokens = dl.split(RegExp(r'\s+'));
@@ -300,33 +312,50 @@ class RosterParser {
       }
     }
 
-    // Map airport pairs (dep, arr) to flight days
-    final flightRoutes = <int, ({String dep, String arr})>{};
+    // Map 1st-leg airport pairs to active days, then extract flight routes.
     final nFlights = flightDayIndices.length;
-    if (airportRows.length >= 2 &&
-        airportRows[0].length == nFlights &&
-        airportRows[1].length == nFlights) {
-      for (int i = 0; i < nFlights; i++) {
-        flightRoutes[flightDayIndices[i]] = (
-          dep: airportRows[0][i],
-          arr: airportRows[1][i],
-        );
-      }
-    } else if (airportRows.length >= 2) {
-      // Counts don't match perfectly - try mapping the minimum
+    final nActive = activeDayIndices.length;
+    final allRoutes = <int, ({String dep, String arr})>{};
+
+    if (airportRows.length >= 2) {
       final depRow = airportRows[0];
       final arrRow = airportRows[1];
-      final n = [depRow.length, arrRow.length, nFlights].reduce(
-          (a, b) => a < b ? a : b);
-      for (int i = 0; i < n; i++) {
-        flightRoutes[flightDayIndices[i]] = (
-          dep: depRow[i],
-          arr: arrRow[i],
-        );
+
+      // Try matching to activeDayIndices first (includes ESIM etc.)
+      if (depRow.length == nActive && arrRow.length == nActive) {
+        for (int i = 0; i < nActive; i++) {
+          allRoutes[activeDayIndices[i]] = (
+            dep: depRow[i],
+            arr: arrRow[i],
+          );
+        }
+      } else if (depRow.length == nFlights && arrRow.length == nFlights) {
+        for (int i = 0; i < nFlights; i++) {
+          allRoutes[flightDayIndices[i]] = (
+            dep: depRow[i],
+            arr: arrRow[i],
+          );
+        }
+      } else {
+        // Best-effort: use smaller count
+        final target = (depRow.length >= nActive) ? activeDayIndices : flightDayIndices;
+        final n = [depRow.length, arrRow.length, target.length]
+            .reduce((a, b) => a < b ? a : b);
+        for (int i = 0; i < n; i++) {
+          allRoutes[target[i]] = (dep: depRow[i], arr: arrRow[i]);
+        }
       }
     }
 
-    // Step 6: Extract time rows and map to flight days
+    // Extract only flight-day routes from allRoutes
+    final flightRoutes = <int, ({String dep, String arr})>{};
+    for (final fi in flightDayIndices) {
+      if (allRoutes.containsKey(fi)) {
+        flightRoutes[fi] = allRoutes[fi]!;
+      }
+    }
+
+    // Step 7: Extract time rows and map to flight days
     final timeRows = <List<String>>[];
     for (final dl in dataLines) {
       final tokens = dl.split(RegExp(r'\s+'));
@@ -344,19 +373,31 @@ class RosterParser {
       }
     }
 
+    // Map times similarly — active days may have times too (ESIM has sim times)
     final flightTimes = <int, ({String checkIn, String checkOut})>{};
-    if (timeRows.length >= 2 &&
-        timeRows[0].length == nFlights &&
-        timeRows[1].length == nFlights) {
-      for (int i = 0; i < nFlights; i++) {
-        flightTimes[flightDayIndices[i]] = (
-          checkIn: timeRows[0][i],
-          checkOut: timeRows[1][i],
-        );
+    if (timeRows.length >= 2) {
+      final t0 = timeRows[0];
+      final t1 = timeRows[1];
+      if (t0.length == nActive && t1.length == nActive) {
+        for (int i = 0; i < nActive; i++) {
+          if (flightDayIndices.contains(activeDayIndices[i])) {
+            flightTimes[activeDayIndices[i]] = (
+              checkIn: t0[i],
+              checkOut: t1[i],
+            );
+          }
+        }
+      } else if (t0.length == nFlights && t1.length == nFlights) {
+        for (int i = 0; i < nFlights; i++) {
+          flightTimes[flightDayIndices[i]] = (
+            checkIn: t0[i],
+            checkOut: t1[i],
+          );
+        }
       }
     }
 
-    // Step 7: Extract 2nd-leg flight numbers
+    // Step 8: Extract 2nd-leg flight numbers
     final extraFlightRows = <List<String>>[];
     for (final dl in dataLines) {
       final tokens = dl.split(RegExp(r'\s+'));
@@ -375,30 +416,29 @@ class RosterParser {
       }
     }
 
-    // Map 2nd-leg flights + routes
+    // Map 2nd-leg flights to flight days (1:1 if counts match)
     final extraLegs = <int, List<({String fn, String? dep, String? arr})>>{};
     if (extraFlightRows.isNotEmpty) {
       final efRow = extraFlightRows[0];
-      // 2nd-leg airports are in the 3rd and 4th airport rows
+
+      // 2nd-leg airports: 3rd and 4th airport rows
       List<String>? dep2, arr2;
       if (airportRows.length >= 4) {
         dep2 = airportRows[2];
         arr2 = airportRows[3];
       }
-      // Match extra flights to flight days that are likely multi-leg
-      // We can't know exactly which flight days have 2nd legs without column
-      // alignment, so just store them indexed by position
-      final n2 = efRow.length;
-      int flightIdx = 0;
-      for (int i = 0; i < n2 && flightIdx < nFlights; i++) {
-        final di = flightDayIndices[flightIdx];
-        extraLegs.putIfAbsent(di, () => []);
-        extraLegs[di]!.add((
-          fn: efRow[i],
-          dep: dep2 != null && i < dep2.length ? dep2[i] : null,
-          arr: arr2 != null && i < arr2.length ? arr2[i] : null,
-        ));
-        flightIdx++;
+
+      if (efRow.length == nFlights) {
+        for (int i = 0; i < nFlights; i++) {
+          final di = flightDayIndices[i];
+          extraLegs[di] = [
+            (
+              fn: efRow[i],
+              dep: dep2 != null && i < dep2.length ? dep2[i] : null,
+              arr: arr2 != null && i < arr2.length ? arr2[i] : null,
+            )
+          ];
+        }
       }
     }
 
