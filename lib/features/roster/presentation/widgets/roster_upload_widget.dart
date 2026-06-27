@@ -141,52 +141,65 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
   }
 
   void _showRawTextDialog(BuildContext ctx, String rawText, Roster roster) {
-    showDialog(
+    showModalBottomSheet(
       context: ctx,
-      builder: (c) => AlertDialog(
-        title: const Text('Roster chargé - aucun vol détecté'),
-        content: SizedBox(
-          width: double.maxFinite,
-          height: 300,
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Le PDF a été lu mais le parser n\'a pas trouvé de vols. '
-                  'Stats: ${roster.flightDays}j vols, ${roster.offDays}j repos.',
-                  style: AppTextStyles.caption,
-                ),
-                const SizedBox(height: 12),
-                Text('Texte extrait du PDF :', style: AppTextStyles.bodyBold),
-                const SizedBox(height: 8),
-                Container(
-                  padding: const EdgeInsets.all(8),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (c) => DraggableScrollableSheet(
+        initialChildSize: 0.85,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (_, scrollCtrl) => Padding(
+          padding: const EdgeInsets.all(16),
+          child: ListView(
+            controller: scrollCtrl,
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: SelectableText(
-                    rawText.length > 2000
-                        ? rawText.substring(0, 2000)
-                        : rawText,
-                    style: const TextStyle(
-                      fontSize: 10,
-                      fontFamily: 'monospace',
-                    ),
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Aucun vol détecté',
+                style: AppTextStyles.heading2,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Le PDF a été lu (${rawText.length} caractères). '
+                'Stats: ${roster.flightDays}j vols, ${roster.offDays}j repos, '
+                '${roster.totalLandings} atterrissages. '
+                'Mais les vols individuels n\'ont pas été trouvés.\n\n'
+                'Faites une capture de ce texte et envoyez-la pour corriger le parser.',
+                style: AppTextStyles.caption,
+              ),
+              const SizedBox(height: 12),
+              Text('Texte extrait du PDF :', style: AppTextStyles.bodyBold),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: SelectableText(
+                  rawText,
+                  style: const TextStyle(
+                    fontSize: 9,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(c),
-            child: const Text('OK'),
-          ),
-        ],
       ),
     );
   }

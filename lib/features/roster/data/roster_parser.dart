@@ -116,20 +116,25 @@ class RosterParser {
     final month = periodStart.month;
     final daysInMonth = DateTime(year, month + 1, 0).day;
 
-    // Strategy 1: grid-based (tab-separated columns from PDF layout)
-    var duties = _tryGridParse(text, year, month, daysInMonth);
+    // Strategy 1: AvioDev tabular format (each flight leg is a row)
+    var duties = _tryAvioDevParse(text, year, month, daysInMonth);
 
-    // Strategy 2: row-based (one duty per line with day number)
+    // Strategy 2: grid-based (tab-separated columns from PDF layout)
+    if (duties.isEmpty) {
+      duties = _tryGridParse(text, year, month, daysInMonth);
+    }
+
+    // Strategy 3: row-based (one duty per line with day number)
     if (duties.isEmpty) {
       duties = _tryRowParse(text, year, month, daysInMonth);
     }
 
-    // Strategy 3: token-based (find day+flight+airport sequences)
+    // Strategy 4: token-based (find day+flight+airport sequences)
     if (duties.isEmpty) {
       duties = _tryTokenParse(text, year, month, daysInMonth);
     }
 
-    // Strategy 4: find flights by proximity to day numbers
+    // Strategy 5: find flights by proximity to day numbers
     if (duties.isEmpty) {
       duties = _tryProximityParse(text, year, month, daysInMonth);
     }
@@ -148,6 +153,162 @@ class RosterParser {
     });
 
     return duties;
+  }
+
+  // Strategy: AvioDev Personal Crew Schedule Report format
+  List<RosterDuty> _tryAvioDevParse(String text, int year, int month, int daysInMonth) {
+    final duties = <RosterDuty>[];
+    final lines = text.split('\n');
+
+    for (final line in lines) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty) continue;
+
+      // AvioDev format: tab or multi-space separated fields
+      // Pattern: "DD Mon FLT AH1069 ALG IST 0530 1015 ..."
+      // or: "DD	AH1069	ALG	IST	0530	1015"
+      // or: "01 Jun Mon	1069	ALG	IST	05:30	10:15	..."
+      final cells = trimmed.split(RegExp(r'\t+'));
+
+      // Try tab-separated first
+      if (cells.length >= 3) {
+        final parsed = _parseAvioDevCells(cells, year, month, daysInMonth);
+        if (parsed != null) {
+          duties.addAll(parsed);
+          continue;
+        }
+      }
+
+      // Try space-separated with flexible patterns
+      // Pattern: DD [Mon] [Jun] flight_or_activity [DEP] [ARR] [time] [time]
+      final spaceMatch = RegExp(
+        r'(\d{1,2})\s+'
+        r'(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun|Lu|Ma|Me|Je|Ve|Sa|Di)\w*\s+'
+        r'(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+'
+        r'(.+)',
+        caseSensitive: false,
+      ).firstMatch(trimmed);
+
+      if (spaceMatch != null) {
+        final day = int.tryParse(spaceMatch.group(1)!);
+        final rest = spaceMatch.group(2)!.trim();
+        if (day != null && day >= 1 && day <= daysInMonth) {
+          final parsed = _parseActivityString(rest, year, month, day);
+          if (parsed != null) duties.addAll(parsed);
+        }
+        continue;
+      }
+
+      // Pattern without month: "DD Mon activity..."
+      final shortMatch = RegExp(
+        r'^(\d{1,2})\s+'
+        r'(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun|Lu|Ma|Me|Je|Ve|Sa|Di)\w*\s+'
+        r'(.+)',
+        caseSensitive: false,
+      ).firstMatch(trimmed);
+
+      if (shortMatch != null) {
+        final day = int.tryParse(shortMatch.group(1)!);
+        final rest = shortMatch.group(2)!.trim();
+        if (day != null && day >= 1 && day <= daysInMonth) {
+          final parsed = _parseActivityString(rest, year, month, day);
+          if (parsed != null) duties.addAll(parsed);
+        }
+      }
+    }
+
+    return duties;
+  }
+
+  List<RosterDuty>? _parseAvioDevCells(List<String> cells, int year, int month, int daysInMonth) {
+    // Find day number in first few cells
+    int? day;
+    int startIdx = 0;
+
+    for (int i = 0; i < cells.length && i < 3; i++) {
+      final cleaned = cells[i].replaceAll(RegExp(r'[A-Za-z\s]'), '').trim();
+      final num = int.tryParse(cleaned);
+      if (num != null && num >= 1 && num <= daysInMonth) {
+        day = num;
+        startIdx = i + 1;
+        break;
+      }
+    }
+
+    if (day == null) return null;
+
+    // Remaining cells contain activity data
+    final remaining = cells.sublist(startIdx).map((c) => c.trim()).where((c) => c.isNotEmpty).toList();
+    if (remaining.isEmpty) return null;
+
+    return _parseActivityString(remaining.join(' '), year, month, day);
+  }
+
+  List<RosterDuty>? _parseActivityString(String activity, int year, int month, int day) {
+    final upper = activity.toUpperCase().trim();
+    final duties = <RosterDuty>[];
+
+    // Check for activity codes
+    if (_isActivityCode(upper) || upper.startsWith('RH') || upper.startsWith('OFF') || upper == 'DO' || upper == 'JA') {
+      duties.add(RosterDuty(
+        date: DateTime(year, month, day),
+        type: _codeToType(upper.split(RegExp(r'\s')).first),
+      ));
+      return duties;
+    }
+
+    // Parse flight data from the activity string
+    // Find flight numbers, airports, times
+    final tokens = activity.split(RegExp(r'[\s\t]+'));
+    final flightNums = <String>[];
+    final airports = <String>[];
+    final times = <DateTime>[];
+
+    for (final token in tokens) {
+      final t = token.toUpperCase().trim();
+      if (t.isEmpty) continue;
+
+      // Flight number: AH1069, AH 1069, 1069
+      final fn = _extractFlightNum(t);
+      if (fn != null) {
+        flightNums.add(fn);
+        continue;
+      }
+
+      // Airport code (3 uppercase letters, not an activity code)
+      if (RegExp(r'^[A-Z]{3}$').hasMatch(t) && !_isActivityCode(t)) {
+        airports.add(t);
+        continue;
+      }
+
+      // Time: various formats
+      final time = _timeFromStr(year, month, day, token);
+      if (time != null) {
+        times.add(time);
+        continue;
+      }
+    }
+
+    if (flightNums.isEmpty) return null;
+
+    for (int i = 0; i < flightNums.length; i++) {
+      final dep = (i * 2) < airports.length ? airports[i * 2] : null;
+      final arr = (i * 2 + 1) < airports.length ? airports[i * 2 + 1] : null;
+      final checkIn = (i * 2) < times.length ? times[i * 2] : null;
+      final checkOut = (i * 2 + 1) < times.length ? times[i * 2 + 1] : null;
+
+      duties.add(RosterDuty(
+        date: DateTime(year, month, day),
+        type: DutyType.flight,
+        flightNumber: flightNums[i],
+        departure: dep,
+        arrival: arr,
+        checkIn: checkIn,
+        checkOut: checkOut,
+      ));
+    }
+
+    return duties.isEmpty ? null : duties;
   }
 
   // Strategy: Grid-based parsing from tab-separated PDF extraction
