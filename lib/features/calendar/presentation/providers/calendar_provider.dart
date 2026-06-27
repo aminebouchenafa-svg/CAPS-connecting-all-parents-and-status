@@ -1,17 +1,11 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/datasources/calendar_remote_datasource.dart';
-import '../../data/repositories/calendar_repository_impl.dart';
+import '../../data/repositories/demo_calendar_repository.dart';
 import '../../domain/entities/calendar_event.dart';
 import '../../domain/repositories/calendar_repository.dart';
 
-final calendarDatasourceProvider = Provider<CalendarRemoteDatasource>((ref) {
-  return CalendarRemoteDatasource(firestore: FirebaseFirestore.instance);
-});
-
 final calendarRepositoryProvider = Provider<CalendarRepository>((ref) {
-  return CalendarRepositoryImpl(ref.read(calendarDatasourceProvider));
+  return DemoCalendarRepository();
 });
 
 final selectedDateProvider = StateProvider<DateTime>((ref) => DateTime.now());
@@ -33,11 +27,11 @@ final eventsForSelectedDateProvider =
     Provider.family<List<CalendarEvent>, List<CalendarEvent>>((ref, allEvents) {
   final selectedDate = ref.watch(selectedDateProvider);
   return allEvents.where((event) {
-    final eventDay = DateTime(
+    final eventStart = DateTime(
         event.startDate.year, event.startDate.month, event.startDate.day);
-    final selected = DateTime(
-        selectedDate.year, selectedDate.month, selectedDate.day);
-    return eventDay == selected ||
+    final selected =
+        DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+    return eventStart == selected ||
         (event.startDate.isBefore(selected.add(const Duration(days: 1))) &&
             event.endDate.isAfter(selected));
   }).toList();

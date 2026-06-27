@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../../core/constants/demo_data.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
-import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../domain/entities/calendar_event.dart';
 import '../providers/calendar_provider.dart';
 
@@ -61,7 +61,8 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
     if (time == null || !mounted) return;
 
     setState(() {
-      final dt = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+      final dt =
+          DateTime(date.year, date.month, date.day, time.hour, time.minute);
       if (isStart) {
         _startDate = dt;
         if (_endDate.isBefore(_startDate)) {
@@ -83,13 +84,10 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
 
     setState(() => _isSaving = true);
 
-    final user = ref.read(authStateProvider).value;
-    if (user == null) return;
-
     final event = CalendarEvent(
       id: const Uuid().v4(),
       householdId: widget.householdId,
-      createdByUid: user.uid,
+      createdByUid: DemoData.pilot.uid,
       title: _titleController.text.trim(),
       description: _descriptionController.text.trim().isNotEmpty
           ? _descriptionController.text.trim()
@@ -163,8 +161,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
                   label: Text(type.label),
                   selected: isSelected,
                   selectedColor: _eventColor(type).withValues(alpha: 0.2),
-                  onSelected: (_) =>
-                      setState(() => _selectedType = type),
+                  onSelected: (_) => setState(() => _selectedType = type),
                 );
               }).toList(),
             ),

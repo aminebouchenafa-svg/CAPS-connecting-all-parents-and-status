@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/constants/demo_data.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/caps_card.dart';
-import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../domain/entities/calendar_event.dart';
 import '../providers/calendar_provider.dart';
 import '../widgets/add_event_sheet.dart';
@@ -14,54 +14,42 @@ class CalendarPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final authState = ref.watch(authStateProvider);
+    final householdId = DemoData.householdId;
+    final eventsAsync = ref.watch(calendarEventsProvider(householdId));
+    final selectedDate = ref.watch(selectedDateProvider);
 
-    return authState.when(
-      data: (user) {
-        if (user == null) return const SizedBox.shrink();
-
-        final eventsAsync =
-            ref.watch(calendarEventsProvider(user.householdId));
-        final selectedDate = ref.watch(selectedDateProvider);
-
-        return Scaffold(
-          appBar: AppBar(title: const Text('Calendrier Familial')),
-          body: Column(
-            children: [
-              CalendarDatePicker(
-                initialDate: selectedDate,
-                firstDate:
-                    DateTime.now().subtract(const Duration(days: 365)),
-                lastDate: DateTime.now().add(const Duration(days: 365)),
-                onDateChanged: (date) {
-                  ref.read(selectedDateProvider.notifier).state = date;
-                },
-              ),
-              const Divider(height: 1),
-              Expanded(
-                child: eventsAsync.when(
-                  data: (allEvents) {
-                    final dayEvents = ref.watch(
-                        eventsForSelectedDateProvider(allEvents));
-                    return _EventsList(events: dayEvents);
-                  },
-                  loading: () =>
-                      const Center(child: CircularProgressIndicator()),
-                  error: (e, _) => Center(child: Text('Erreur: $e')),
-                ),
-              ),
-            ],
+    return Scaffold(
+      appBar: AppBar(title: const Text('Calendrier Familial')),
+      body: Column(
+        children: [
+          CalendarDatePicker(
+            initialDate: selectedDate,
+            firstDate: DateTime.now().subtract(const Duration(days: 365)),
+            lastDate: DateTime.now().add(const Duration(days: 365)),
+            onDateChanged: (date) {
+              ref.read(selectedDateProvider.notifier).state = date;
+            },
           ),
-          floatingActionButton: FloatingActionButton(
-            onPressed: () => _showAddEventSheet(context, user.householdId),
-            backgroundColor: AppColors.accent,
-            child: const Icon(Icons.add),
+          const Divider(height: 1),
+          Expanded(
+            child: eventsAsync.when(
+              data: (allEvents) {
+                final dayEvents =
+                    ref.watch(eventsForSelectedDateProvider(allEvents));
+                return _EventsList(events: dayEvents);
+              },
+              loading: () =>
+                  const Center(child: CircularProgressIndicator()),
+              error: (e, _) => Center(child: Text('Erreur: $e')),
+            ),
           ),
-        );
-      },
-      loading: () =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (e, _) => Scaffold(body: Center(child: Text('Erreur: $e'))),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _showAddEventSheet(context, householdId),
+        backgroundColor: AppColors.accent,
+        child: const Icon(Icons.add),
+      ),
     );
   }
 

@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/constants/demo_data.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/caps_card.dart';
 import '../../../../core/widgets/countdown_display.dart';
 import '../../../../core/widgets/loading_indicator.dart';
 import '../../../../core/widgets/status_badge.dart';
-import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../domain/entities/flight_status.dart';
 import '../providers/flight_status_provider.dart';
 import '../widgets/status_update_sheet.dart';
@@ -16,42 +16,25 @@ class DashboardPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final authState = ref.watch(authStateProvider);
+    final householdId = DemoData.householdId;
+    final isPilot = DemoData.pilot.isPilot;
+    final statusAsync = ref.watch(currentFlightStatusProvider(householdId));
 
-    return authState.when(
-      data: (user) {
-        if (user == null) return const SizedBox.shrink();
-
-        final statusAsync =
-            ref.watch(currentFlightStatusProvider(user.householdId));
-
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('C.A.P.S.'),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.logout),
-                onPressed: () => ref.read(authRepositoryProvider).signOut(),
-              ),
-            ],
-          ),
-          body: statusAsync.when(
-            data: (status) => _DashboardContent(
-              status: status,
-              isPilot: user.isPilot,
-              householdId: user.householdId,
-            ),
-            loading: () => const LoadingIndicator(
-              message: 'Chargement du statut...',
-            ),
-            error: (e, _) => Center(child: Text('Erreur: $e')),
-          ),
-        );
-      },
-      loading: () => const Scaffold(
-        body: LoadingIndicator(message: 'Connexion...'),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('C.A.P.S.'),
       ),
-      error: (e, _) => Scaffold(body: Center(child: Text('Erreur: $e'))),
+      body: statusAsync.when(
+        data: (status) => _DashboardContent(
+          status: status,
+          isPilot: isPilot,
+          householdId: householdId,
+        ),
+        loading: () => const LoadingIndicator(
+          message: 'Chargement du statut...',
+        ),
+        error: (e, _) => Center(child: Text('Erreur: $e')),
+      ),
     );
   }
 }

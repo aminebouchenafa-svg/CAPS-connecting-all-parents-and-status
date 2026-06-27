@@ -1,20 +1,12 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../data/datasources/flight_status_remote_datasource.dart';
-import '../../data/repositories/flight_status_repository_impl.dart';
+import '../../data/repositories/demo_flight_status_repository.dart';
 import '../../domain/entities/flight_status.dart';
 import '../../domain/repositories/flight_status_repository.dart';
 
-final flightStatusDatasourceProvider =
-    Provider<FlightStatusRemoteDatasource>((ref) {
-  return FlightStatusRemoteDatasource(firestore: FirebaseFirestore.instance);
-});
-
 final flightStatusRepositoryProvider =
     Provider<FlightStatusRepository>((ref) {
-  return FlightStatusRepositoryImpl(
-      ref.read(flightStatusDatasourceProvider));
+  return DemoFlightStatusRepository();
 });
 
 final currentFlightStatusProvider =

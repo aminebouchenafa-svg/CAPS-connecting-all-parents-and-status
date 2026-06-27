@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../../../core/constants/demo_data.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
-import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../domain/entities/flight_status.dart';
 import '../providers/flight_status_provider.dart';
 
@@ -54,12 +54,9 @@ class _StatusUpdateSheetState extends ConsumerState<StatusUpdateSheet> {
   Future<void> _saveStatus() async {
     setState(() => _isSaving = true);
 
-    final user = ref.read(authStateProvider).value;
-    if (user == null) return;
-
     final status = FlightStatus(
       id: widget.currentStatus?.id ?? const Uuid().v4(),
-      pilotUid: user.uid,
+      pilotUid: DemoData.pilot.uid,
       householdId: widget.householdId,
       phase: _selectedPhase,
       startTime: DateTime.now(),
