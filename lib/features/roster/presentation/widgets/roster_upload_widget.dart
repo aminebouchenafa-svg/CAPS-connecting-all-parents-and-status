@@ -27,35 +27,86 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
     final document = PdfDocument(inputBytes: bytes);
     final extractor = PdfTextExtractor(document);
 
-    final sb = StringBuffer();
+    final allCells = <({double x, double y, String text})>[];
+
     for (int page = 0; page < document.pages.count; page++) {
       try {
         final lines = extractor.extractTextLines(
           startPageIndex: page,
           endPageIndex: page,
         );
-
-        final rows = <int, List<({double x, String text})>>{};
         for (final line in lines) {
-          final yKey = (line.bounds.top / 4).round();
-          rows.putIfAbsent(yKey, () => []);
-          rows[yKey]!.add((x: line.bounds.left, text: line.text.trim()));
-        }
-
-        final sortedKeys = rows.keys.toList()..sort();
-        for (final key in sortedKeys) {
-          final cells = rows[key]!
-            ..sort((a, b) => a.x.compareTo(b.x));
-          sb.writeln(cells.map((c) => c.text).join('\t'));
+          if (line.text.trim().isNotEmpty) {
+            allCells.add((
+              x: line.bounds.left,
+              y: line.bounds.top + page * 10000,
+              text: line.text.trim(),
+            ));
+          }
         }
       } catch (_) {
-        sb.writeln(
-          extractor.extractText(startPageIndex: page, endPageIndex: page),
-        );
+        allCells.add((
+          x: 0,
+          y: page * 10000.0,
+          text: extractor.extractText(
+            startPageIndex: page,
+            endPageIndex: page,
+          ),
+        ));
       }
     }
 
     document.dispose();
+    if (allCells.isEmpty) return '';
+
+    // Group by Y position (4px tolerance)
+    final rows = <int, List<({double x, String text})>>{};
+    for (final cell in allCells) {
+      final yKey = (cell.y / 4).round();
+      rows.putIfAbsent(yKey, () => []);
+      rows[yKey]!.add((x: cell.x, text: cell.text));
+    }
+
+    final sortedKeys = rows.keys.toList()..sort();
+
+    // Find column positions from the row with the most cells (date row)
+    List<double>? colPositions;
+    for (final key in sortedKeys) {
+      if (rows[key]!.length >= 20) {
+        final sorted = List.of(rows[key]!)
+          ..sort((a, b) => a.x.compareTo(b.x));
+        colPositions = sorted.map((c) => c.x).toList();
+        break;
+      }
+    }
+
+    final sb = StringBuffer();
+    for (final key in sortedKeys) {
+      final cells = rows[key]!..sort((a, b) => a.x.compareTo(b.x));
+
+      if (colPositions != null && cells.length >= 3) {
+        // Align to detected column positions (preserves empty cells)
+        final aligned = List<String>.filled(colPositions.length, '');
+        for (final cell in cells) {
+          int bestCol = 0;
+          double bestDist = double.infinity;
+          for (int i = 0; i < colPositions.length; i++) {
+            final dist = (cell.x - colPositions[i]).abs();
+            if (dist < bestDist) {
+              bestDist = dist;
+              bestCol = i;
+            }
+          }
+          if (bestDist < 30) {
+            aligned[bestCol] = cell.text;
+          }
+        }
+        sb.writeln(aligned.join('\t'));
+      } else {
+        sb.writeln(cells.map((c) => c.text).join('\t'));
+      }
+    }
+
     return sb.toString();
   }
 
@@ -159,7 +210,8 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
             children: [
               Center(
                 child: Container(
-                  width: 40, height: 4,
+                  width: 40,
+                  height: 4,
                   decoration: BoxDecoration(
                     color: Colors.grey[300],
                     borderRadius: BorderRadius.circular(2),
@@ -167,17 +219,15 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
                 ),
               ),
               const SizedBox(height: 12),
-              Text(
-                'Aucun vol détecté',
-                style: AppTextStyles.heading2,
-              ),
+              Text('Aucun vol détecté', style: AppTextStyles.heading2),
               const SizedBox(height: 8),
               Text(
                 'Le PDF a été lu (${rawText.length} caractères). '
                 'Stats: ${roster.flightDays}j vols, ${roster.offDays}j repos, '
                 '${roster.totalLandings} atterrissages. '
                 'Mais les vols individuels n\'ont pas été trouvés.\n\n'
-                'Faites une capture de ce texte et envoyez-la pour corriger le parser.',
+                'Faites une capture de ce texte et envoyez-la '
+                'pour corriger le parser.',
                 style: AppTextStyles.caption,
               ),
               const SizedBox(height: 12),
@@ -191,10 +241,7 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
                 ),
                 child: SelectableText(
                   rawText,
-                  style: const TextStyle(
-                    fontSize: 9,
-                    fontFamily: 'monospace',
-                  ),
+                  style: const TextStyle(fontSize: 9, fontFamily: 'monospace'),
                 ),
               ),
             ],
@@ -227,14 +274,8 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
             ),
           ),
           const SizedBox(height: 20),
-
-          Icon(
-            Icons.upload_file,
-            size: 48,
-            color: AppColors.primary,
-          ),
+          Icon(Icons.upload_file, size: 48, color: AppColors.primary),
           const SizedBox(height: 12),
-
           Text(
             hasRoster ? 'Remplacer le roster' : 'Importer mon roster',
             style: AppTextStyles.heading2,
@@ -246,7 +287,6 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
-
           if (_loading)
             const Padding(
               padding: EdgeInsets.all(32),
@@ -259,7 +299,6 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
               ),
             )
           else ...[
-            // Big blue button
             SizedBox(
               width: double.infinity,
               height: 56,
@@ -280,8 +319,6 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
               ),
             ),
             const SizedBox(height: 16),
-
-            // Demo option
             TextButton.icon(
               onPressed: _loadDemoRoster,
               icon: Icon(Icons.auto_awesome, size: 16, color: Colors.grey[600]),
@@ -291,7 +328,6 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
               ),
             ),
           ],
-
           if (_error != null) ...[
             const SizedBox(height: 16),
             Container(
