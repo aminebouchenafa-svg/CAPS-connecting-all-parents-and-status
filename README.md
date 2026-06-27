@@ -2,56 +2,84 @@
 
 Cockpit Familial pour pilotes. Suivez votre statut opérationnel en temps réel et partagez un calendrier familial.
 
-## Setup rapide
+**Webapp PWA** : fonctionne sur iPhone, iPad, Android et desktop via le navigateur. S'installe comme une app native depuis Safari.
 
-```bash
-# 1. Clone et entre dans le projet
-git clone https://github.com/aminebouchenafa-svg/caps-connecting-all-parents-and-status.git
-cd caps-connecting-all-parents-and-status
-git checkout claude/caps-flutter-architecture-bqskkk
+## Accéder à l'app (utilisateurs)
 
-# 2. Lance le script de setup
-./setup.sh
+1. Ouvre **Safari** sur ton iPhone/iPad
+2. Va sur : `https://caps-family-app.web.app`
+3. Tape sur **Partager** (icône carré + flèche) → **Sur l'écran d'accueil**
+4. L'app C.A.P.S. apparaît comme une app native
 
-# 3. Configure Firebase
-dart pub global activate flutterfire_cli
-flutterfire configure
+## Setup Firebase (une seule fois, depuis un ordi)
 
-# 4. Lance l'app
-flutter run -d chrome
-```
+### 1. Créer le projet Firebase
 
-## Setup Firebase (obligatoire)
+1. Va sur [console.firebase.google.com](https://console.firebase.google.com)
+2. Crée un projet nommé `caps-family-app`
+3. Active **Authentication** > **Email/Password**
+4. Crée **Cloud Firestore** > Démarrer en **mode test**
 
-1. Crée un projet sur [Firebase Console](https://console.firebase.google.com)
-2. Active **Authentication > Email/Password**
-3. Crée **Cloud Firestore** (mode test)
-4. Lance `flutterfire configure` pour générer les clés
-5. Crée un utilisateur dans Authentication
-6. Ajoute son profil dans Firestore :
+### 2. Créer les comptes
 
-```
-Collection: users/{UID}
+Dans Firebase Console > Authentication > Ajouter un utilisateur :
+- `amine@example.com` (pilote)
+- `amina@example.com` (conjointe)
+
+### 3. Ajouter les profils Firestore
+
+Dans Firestore > Créer une collection `users` :
+
+**Document ID = UID d'Amine** (copié depuis Authentication) :
+```json
 {
   "email": "amine@example.com",
   "displayName": "Amine",
   "role": "pilot",
   "householdId": "famille-bouchenafa",
-  "createdAt": <timestamp>
+  "createdAt": "<timestamp>"
 }
 ```
 
-Pour ajouter Amina (conjointe) :
-```
-Collection: users/{UID_AMINA}
+**Document ID = UID d'Amina** :
+```json
 {
   "email": "amina@example.com",
   "displayName": "Amina",
   "role": "spouse",
   "householdId": "famille-bouchenafa",
-  "createdAt": <timestamp>
+  "createdAt": "<timestamp>"
 }
 ```
+
+### 4. Configurer et déployer (depuis un ordi)
+
+```bash
+git clone https://github.com/aminebouchenafa-svg/caps-connecting-all-parents-and-status.git
+cd caps-connecting-all-parents-and-status
+git checkout claude/caps-flutter-architecture-bqskkk
+
+# Setup Flutter
+flutter create . --project-name caps --platforms web
+flutter pub get
+
+# Connecter Firebase
+dart pub global activate flutterfire_cli
+flutterfire configure
+
+# Build et déployer
+flutter build web --release --web-renderer canvaskit
+firebase deploy --only hosting
+```
+
+L'app est maintenant en ligne sur `https://caps-family-app.web.app`
+
+### 5. Déploiement automatique (optionnel)
+
+Le workflow GitHub Actions (`.github/workflows/deploy.yml`) déploie automatiquement à chaque push. Pour l'activer :
+
+1. Dans Firebase Console > Paramètres > Comptes de service > Générer une clé
+2. Dans GitHub > Settings > Secrets > Ajouter `FIREBASE_SERVICE_ACCOUNT` avec la clé JSON
 
 ## Architecture
 
@@ -70,7 +98,8 @@ Chaque feature : `domain/` (entities, repositories) → `data/` (models, datasou
 ## Stack
 
 - **Flutter 3.29+** / Dart 3.7+
-- **Firebase** (Auth, Firestore)
+- **Firebase** (Auth, Firestore, Hosting)
 - **Riverpod** (state management)
 - **GoRouter** (navigation)
+- **PWA** (installable sur iOS/Android)
 - **Clean Architecture**
