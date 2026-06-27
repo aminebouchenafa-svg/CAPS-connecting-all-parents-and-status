@@ -91,7 +91,7 @@ abstract final class DemoData {
           id: 'evt-3',
           householdId: householdId,
           createdByUid: 'demo-amina',
-          title: 'RDV pédiatre Sisso',
+          title: 'RDV pédiatre Yanis',
           description: 'Contrôle de routine',
           type: EventType.medical,
           startDate: DateTime.now().add(const Duration(days: 5, hours: 10)),

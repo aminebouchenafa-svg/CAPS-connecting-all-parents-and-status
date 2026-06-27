@@ -30,7 +30,7 @@ class WelcomePage extends ConsumerWidget {
                   '• Dans quelle phase de vol il est\n'
                   '• Quand il sera de retour\n'
                   '• Ses messages pour la famille\n\n'
-                  'Amina, Ilyane et Sisso restent connectés '
+                  'Amina, Ilyane et Yanis restent connectés '
                   'même quand Papa est loin.',
             ),
             _WelcomeSlide(
@@ -56,7 +56,7 @@ class WelcomePage extends ConsumerWidget {
               description:
                   'Un compteur décompte en temps réel '
                   'le temps restant avant qu\'Amine soit disponible.\n\n'
-                  'Ilyane et Sisso peuvent regarder '
+                  'Ilyane et Yanis peuvent regarder '
                   'le compteur descendre et savoir '
                   'exactement quand Papa sera là.\n\n'
                   'Plus besoin de demander 10 fois par jour !',
