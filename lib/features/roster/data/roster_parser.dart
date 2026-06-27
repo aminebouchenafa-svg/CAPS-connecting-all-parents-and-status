@@ -48,9 +48,11 @@ class RosterParser {
   };
 
   String? lastExtractedText;
+  String? lastDebugInfo;
 
   Roster parse(String text) {
     lastExtractedText = text;
+    lastDebugInfo = null;
 
     final pilotName = _extractField(text, 'NAME');
     final pilotId = _extractField(text, 'ID');
@@ -228,8 +230,29 @@ class RosterParser {
 
     if (activityRowIdx < 0) return [];
 
-    // Step 3: Parse the activity row - map each token to a day index
-    final actTokens = lines[activityRowIdx].trim().split(RegExp(r'\s+'));
+    // Step 3: Parse the activity row - map each token to a day index.
+    // Pre-process: merge split codes (PDF extraction can split "//"->"/ /"
+    // and "/RH"->"/ RH", each consuming an extra day index).
+    final rawTokens = lines[activityRowIdx].trim().split(RegExp(r'\s+'));
+    final actTokens = <String>[];
+    for (int i = 0; i < rawTokens.length; i++) {
+      final t = rawTokens[i];
+      if (t == '/' && i + 1 < rawTokens.length) {
+        final next = rawTokens[i + 1];
+        if (next == '/') {
+          actTokens.add('//');
+          i++;
+          continue;
+        }
+        if (next.toUpperCase() == 'RH') {
+          actTokens.add('/RH');
+          i++;
+          continue;
+        }
+      }
+      actTokens.add(t);
+    }
+
     final dayActivities = <int, String>{};
     final flightDayIndices = <int>[];
     int dayIdx = 0;
@@ -256,6 +279,21 @@ class RosterParser {
     }
 
     if (dayActivities.isEmpty) return [];
+
+    // Debug: store the parsed mapping for troubleshooting
+    final debugSb = StringBuffer();
+    debugSb.writeln('=== SEQUENTIAL PARSER DEBUG ===');
+    debugSb.writeln('Raw tokens (${rawTokens.length}): ${rawTokens.join(" | ")}');
+    debugSb.writeln('Merged tokens (${actTokens.length}): ${actTokens.join(" | ")}');
+    debugSb.writeln('Day count: ${dayDates.length}, Mapped: $dayIdx');
+    debugSb.writeln('Flight days: ${flightDayIndices.length}');
+    for (final entry in dayActivities.entries) {
+      final di = entry.key;
+      final date = di < dayDates.length ? dayDates[di] : null;
+      final dayNum = date?.day ?? '?';
+      final isF = flightDayIndices.contains(di) ? ' [FLIGHT]' : '';
+      debugSb.writeln('  Day $dayNum (idx $di): ${entry.value}$isF');
+    }
 
     // Step 4: Collect data lines between activity row and stats section.
     // Skip duplicate partial activity rows (PDF extraction artifact).
@@ -501,6 +539,29 @@ class RosterParser {
         notes: upper,
       ));
     }
+
+    // Store debug info
+    debugSb.writeln('Airport rows found: ${airportRows.length}');
+    for (int r = 0; r < airportRows.length; r++) {
+      debugSb.writeln('  Row $r (${airportRows[r].length}): ${airportRows[r].join(" ")}');
+    }
+    debugSb.writeln('Active days: $nActive, Flight days: $nFlights');
+    debugSb.writeln('Routes mapped:');
+    for (final fi in flightDayIndices) {
+      final route = flightRoutes[fi];
+      final date = fi < dayDates.length ? dayDates[fi] : null;
+      final fn = dayActivities[fi] ?? '?';
+      debugSb.writeln('  Day ${date?.day} $fn: ${route?.dep ?? "?"} → ${route?.arr ?? "?"}');
+    }
+    debugSb.writeln('2nd legs: ${extraLegs.length}');
+    for (final e in extraLegs.entries) {
+      final date = e.key < dayDates.length ? dayDates[e.key] : null;
+      for (final leg in e.value) {
+        debugSb.writeln('  Day ${date?.day} ${leg.fn}: ${leg.dep ?? "?"} → ${leg.arr ?? "?"}');
+      }
+    }
+    debugSb.writeln('Flights detected: ${duties.where((d) => d.isFlight).length}');
+    lastDebugInfo = debugSb.toString();
 
     return duties;
   }

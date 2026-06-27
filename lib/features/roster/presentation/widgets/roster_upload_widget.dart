@@ -199,7 +199,7 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
 
         final flightCount = roster.duties.where((d) => d.isFlight).length;
         if (flightCount < 3) {
-          _showRawTextDialog(context, text, roster);
+          _showRawTextDialog(context, text, roster, parser.lastDebugInfo);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -208,6 +208,12 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
                 '$flightCount vols trouvés.',
               ),
               backgroundColor: AppColors.success,
+              action: SnackBarAction(
+                label: 'Debug',
+                textColor: Colors.white,
+                onPressed: () => _showRawTextDialog(
+                    context, text, roster, parser.lastDebugInfo),
+              ),
             ),
           );
         }
@@ -231,7 +237,9 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
     );
   }
 
-  void _showRawTextDialog(BuildContext ctx, String rawText, Roster roster) {
+  void _showRawTextDialog(
+      BuildContext ctx, String rawText, Roster roster, String? debugInfo) {
+    final flightCount = roster.duties.where((d) => d.isFlight).length;
     showModalBottomSheet(
       context: ctx,
       isScrollControlled: true,
@@ -259,17 +267,38 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
                 ),
               ),
               const SizedBox(height: 12),
-              Text('Aucun vol détecté', style: AppTextStyles.heading2),
+              Text(
+                flightCount > 0
+                    ? 'Debug Parser ($flightCount vols)'
+                    : 'Aucun vol détecté',
+                style: AppTextStyles.heading2,
+              ),
               const SizedBox(height: 8),
               Text(
                 'Le PDF a été lu (${rawText.length} caractères). '
                 'Stats: ${roster.flightDays}j vols, ${roster.offDays}j repos, '
-                '${roster.totalLandings} atterrissages. '
-                'Mais les vols individuels n\'ont pas été trouvés.\n\n'
+                '${roster.totalLandings} atterrissages.\n\n'
                 'Faites une capture de ce texte et envoyez-la '
                 'pour corriger le parser.',
                 style: AppTextStyles.caption,
               ),
+              if (debugInfo != null) ...[
+                const SizedBox(height: 12),
+                Text('Parser Debug :', style: AppTextStyles.bodyBold),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: SelectableText(
+                    debugInfo,
+                    style:
+                        const TextStyle(fontSize: 9, fontFamily: 'monospace'),
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
               Text('Texte extrait du PDF :', style: AppTextStyles.bodyBold),
               const SizedBox(height: 8),
