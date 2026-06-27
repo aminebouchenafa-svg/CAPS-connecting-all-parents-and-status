@@ -9,6 +9,7 @@ import '../../../../core/constants/demo_data.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../data/roster_parser.dart';
+import '../../domain/entities/roster_duty.dart';
 import '../providers/roster_provider.dart';
 
 class RosterUploadWidget extends ConsumerStatefulWidget {
@@ -76,12 +77,21 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
 
       if (mounted) {
         Navigator.of(context).pop();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Roster de ${roster.pilotName} chargé !'),
-            backgroundColor: AppColors.success,
-          ),
-        );
+
+        final flightCount = roster.duties.where((d) => d.isFlight).length;
+        if (roster.duties.isEmpty) {
+          _showRawTextDialog(context, text, roster);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'Roster de ${roster.pilotName} chargé ! '
+                '$flightCount vols trouvés.',
+              ),
+              backgroundColor: AppColors.success,
+            ),
+          );
+        }
       }
     } catch (e) {
       setState(() {
@@ -98,6 +108,57 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
       const SnackBar(
         content: Text('Roster démo Juin 2026 chargé !'),
         backgroundColor: AppColors.success,
+      ),
+    );
+  }
+
+  void _showRawTextDialog(BuildContext ctx, String rawText, Roster roster) {
+    showDialog(
+      context: ctx,
+      builder: (c) => AlertDialog(
+        title: const Text('Roster chargé - aucun vol détecté'),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 300,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Le PDF a été lu mais le parser n\'a pas trouvé de vols. '
+                  'Stats: ${roster.flightDays}j vols, ${roster.offDays}j repos.',
+                  style: AppTextStyles.caption,
+                ),
+                const SizedBox(height: 12),
+                Text('Texte extrait du PDF :', style: AppTextStyles.bodyBold),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: SelectableText(
+                    rawText.length > 2000
+                        ? rawText.substring(0, 2000)
+                        : rawText,
+                    style: const TextStyle(
+                      fontSize: 10,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c),
+            child: const Text('OK'),
+          ),
+        ],
       ),
     );
   }

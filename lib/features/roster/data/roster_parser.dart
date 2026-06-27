@@ -25,16 +25,40 @@ class RosterParser {
     'QSF': 'Sétif',
     'GHA': 'Ghardaïa',
     'TMR': 'Tamanrasset',
+    'JFK': 'New York JFK',
+    'LHR': 'Londres',
+    'FRA': 'Francfort',
+    'MAD': 'Madrid',
+    'AMS': 'Amsterdam',
+    'GVA': 'Genève',
+    'PMI': 'Palma',
+    'CAI': 'Le Caire',
+    'CMN': 'Casablanca',
+    'DXB': 'Dubaï',
+    'DOH': 'Doha',
+    'JED': 'Djeddah',
+    'MED': 'Médine',
   };
 
+  static const _monthAbbr = {
+    'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5, 'JUN': 6,
+    'JUL': 7, 'AUG': 8, 'SEP': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12,
+    'JANV': 1, 'FEVR': 2, 'MARS': 3, 'AVR': 4, 'MAI': 5, 'JUIN': 6,
+    'JUIL': 7, 'AOUT': 8, 'SEPT': 9, 'OCTO': 10, 'NOVE': 11, 'DECE': 12,
+  };
+
+  String? lastExtractedText;
+
   Roster parse(String text) {
+    lastExtractedText = text;
+
     final pilotName = _extractField(text, 'NAME');
     final pilotId = _extractField(text, 'ID');
     final base = _extractBase(text);
     final aircraft = _extractAircraft(text);
     final period = _extractPeriod(text);
-    final duties = _parseDuties(text, period.$1);
     final stats = _parseStats(text);
+    final duties = _parseDuties(text, period.$1);
 
     return Roster(
       pilotName: pilotName,
@@ -85,122 +109,331 @@ class RosterParser {
     return DateTime(int.parse(parts[2]), int.parse(parts[1]), int.parse(parts[0]));
   }
 
+  // --- Duty parsing: tries multiple strategies ---
+
   List<RosterDuty> _parseDuties(String text, DateTime periodStart) {
-    final duties = <RosterDuty>[];
     final year = periodStart.year;
     final month = periodStart.month;
+    final daysInMonth = DateTime(year, month + 1, 0).day;
 
-    // Parse RH (repos) days
-    final rhPattern = RegExp(r'//RH|/RH|\bRH\b');
-    // Parse OFF days
-    final offPattern = RegExp(r'\bOFF\b');
+    // Strategy 1: row-based (one duty per line with day number)
+    var duties = _tryRowParse(text, year, month, daysInMonth);
 
-    // Parse flight numbers (4-digit codes like 3017, 4002, etc.)
-    final flightPattern = RegExp(r'\b(\d{4})\b');
-
-    // Parse airport codes from the text
-    final airportPattern = RegExp(r'\b([A-Z]{3})\b');
-
-    // Extract day-by-day activities from the roster text
-    // The roster format has dates as columns: 01 Jun, 02 Jun, etc.
-    for (int day = 1; day <= 31; day++) {
-      final date = DateTime(year, month, day);
-      if (date.isAfter(DateTime(year, month + 1, 0))) break;
-
-      // Check for known activity codes in the text near this date
-      final dayStr = day.toString().padLeft(2, '0');
-      final dayPattern = RegExp('$dayStr\\s+Jun');
-
-      if (dayPattern.hasMatch(text)) {
-        // Try to find what activity is on this day
-        // This is a simplified parser - the PDF format is complex grid layout
-        if (_isDayOff(text, day)) {
-          duties.add(RosterDuty(
-            date: date,
-            type: DutyType.off,
-            notes: 'Jour de repos',
-          ));
-        }
-      }
+    // Strategy 2: token-based (find day+flight+airport sequences)
+    if (duties.isEmpty) {
+      duties = _tryTokenParse(text, year, month, daysInMonth);
     }
 
-    // Parse specific flight legs from the structured data
-    _parseFlightLegs(text, duties, year, month);
+    // Strategy 3: find flights by proximity to day numbers
+    if (duties.isEmpty) {
+      duties = _tryProximityParse(text, year, month, daysInMonth);
+    }
 
-    duties.sort((a, b) => a.date.compareTo(b.date));
+    // Fill in rest/off/standby days from text
+    final coveredDays = duties.map((d) => d.date.day).toSet();
+    _fillActivityDays(text, duties, year, month, daysInMonth, coveredDays);
+
+    duties.sort((a, b) {
+      final cmp = a.date.compareTo(b.date);
+      if (cmp != 0) return cmp;
+      if (a.checkIn != null && b.checkIn != null) {
+        return a.checkIn!.compareTo(b.checkIn!);
+      }
+      return 0;
+    });
+
     return duties;
   }
 
-  bool _isDayOff(String text, int day) {
-    // Days marked with RH or empty columns are rest days
-    return false; // Simplified - full parsing would need grid analysis
-  }
+  // Strategy 1: Each line contains day + flight info or day + activity
+  List<RosterDuty> _tryRowParse(String text, int year, int month, int daysInMonth) {
+    final duties = <RosterDuty>[];
+    final lines = text.split(RegExp(r'[\r\n]+'));
 
-  void _parseFlightLegs(String text, List<RosterDuty> duties, int year, int month) {
-    // Parse the known flight data from the roster
-    // Based on the actual PDF content structure
-    final knownFlights = _extractKnownFlights(text, year, month);
-    duties.addAll(knownFlights);
-  }
+    for (final line in lines) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty || trimmed.length < 3) continue;
 
-  List<RosterDuty> _extractKnownFlights(String text, int year, int month) {
-    final flights = <RosterDuty>[];
+      // Flight line: "01 AH1069 ALG IST 0530 1015"
+      // or "01Jun Mon AH 1069 ALG-IST 05:30 10:15"
+      // or "1 1069 ALG IST 530 1015"
+      final flightMatch = RegExp(
+        r'(?:^|\s)(\d{1,2})\s*'
+        r'(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?\.?\s*'
+        r'(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun|Lu|Ma|Me|Je|Ve|Sa|Di)?\.?\s+'
+        r'(?:AH\s*)?(\d{3,4})\s+'
+        r'([A-Z]{3})\s*[-–→/]?\s*([A-Z]{3})'
+        r'(?:\s+(\d{2,4}[:.]?\d{2})\s+(\d{2,4}[:.]?\d{2}))?',
+      ).firstMatch(trimmed);
 
-    // Hard-coded parsing based on observed eCrew PDF structure
-    // In production, this would use a more sophisticated PDF grid parser
-
-    // Detect flight entries: flight number followed by times and airports
-    final linePattern = RegExp(
-      r'(\d{4})\s+.*?([A-Z]{3})\s+.*?([A-Z]{3})',
-    );
-
-    for (final match in linePattern.allMatches(text)) {
-      final flightNum = match.group(1);
-      final dep = match.group(2);
-      final arr = match.group(3);
-
-      if (flightNum != null && dep != null && arr != null) {
-        if (airportNames.containsKey(dep) || airportNames.containsKey(arr)) {
-          flights.add(RosterDuty(
-            date: DateTime(year, month, 1),
+      if (flightMatch != null) {
+        final day = int.tryParse(flightMatch.group(1)!);
+        if (day != null && day >= 1 && day <= daysInMonth) {
+          duties.add(RosterDuty(
+            date: DateTime(year, month, day),
             type: DutyType.flight,
-            flightNumber: 'AH $flightNum',
-            departure: dep,
-            arrival: arr,
+            flightNumber: 'AH ${flightMatch.group(2)!}',
+            departure: flightMatch.group(3)!,
+            arrival: flightMatch.group(4)!,
+            checkIn: _timeFromStr(year, month, day, flightMatch.group(5)),
+            checkOut: _timeFromStr(year, month, day, flightMatch.group(6)),
+          ));
+          continue;
+        }
+      }
+
+      // Activity line: "03 RH" or "03 OFF" or "29 SBY"
+      final actMatch = RegExp(
+        r'(?:^|\s)(\d{1,2})\s*'
+        r'(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)?\.?\s*'
+        r'(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun|Lu|Ma|Me|Je|Ve|Sa|Di)?\.?\s+'
+        r'(RH|OFF|SBY|STBY|STANDBY|REPOS|REST|DO|JA|C/O)',
+        caseSensitive: false,
+      ).firstMatch(trimmed);
+
+      if (actMatch != null) {
+        final day = int.tryParse(actMatch.group(1)!);
+        if (day != null && day >= 1 && day <= daysInMonth) {
+          duties.add(RosterDuty(
+            date: DateTime(year, month, day),
+            type: _codeToType(actMatch.group(2)!),
           ));
         }
       }
     }
 
-    return flights;
+    return duties;
+  }
+
+  // Strategy 2: Tokenize text and find day→flight→airport→time sequences
+  List<RosterDuty> _tryTokenParse(String text, int year, int month, int daysInMonth) {
+    final duties = <RosterDuty>[];
+    final tokens = text.split(RegExp(r'\s+'));
+
+    for (int i = 0; i < tokens.length - 1; i++) {
+      final dayNum = int.tryParse(tokens[i]);
+      if (dayNum == null || dayNum < 1 || dayNum > daysInMonth) continue;
+
+      final next = tokens[i + 1].toUpperCase();
+
+      // Activity code right after day number
+      if (_isActivityCode(next)) {
+        duties.add(RosterDuty(
+          date: DateTime(year, month, dayNum),
+          type: _codeToType(next),
+        ));
+        i++;
+        continue;
+      }
+
+      // Flight number right after day number
+      final flightNum = _extractFlightNum(next);
+      if (flightNum != null) {
+        String? dep;
+        String? arr;
+        String? depTime;
+        String? arrTime;
+
+        // Look ahead for airports and times
+        for (int j = i + 2; j < tokens.length && j < i + 8; j++) {
+          final t = tokens[j].toUpperCase();
+          if (RegExp(r'^[A-Z]{3}$').hasMatch(t)) {
+            if (dep == null) {
+              dep = t;
+            } else if (arr == null) {
+              arr = t;
+            }
+          } else if (RegExp(r'^\d{2,4}[:.]?\d{2}$').hasMatch(t)) {
+            if (depTime == null) {
+              depTime = t;
+            } else if (arrTime == null) {
+              arrTime = t;
+            }
+          } else if (int.tryParse(t) != null) {
+            break;
+          }
+        }
+
+        duties.add(RosterDuty(
+          date: DateTime(year, month, dayNum),
+          type: DutyType.flight,
+          flightNumber: flightNum,
+          departure: dep,
+          arrival: arr,
+          checkIn: _timeFromStr(year, month, dayNum, depTime),
+          checkOut: _timeFromStr(year, month, dayNum, arrTime),
+        ));
+        i++;
+        continue;
+      }
+    }
+
+    return duties;
+  }
+
+  // Strategy 3: Find all flights and airports, associate with nearest day numbers
+  List<RosterDuty> _tryProximityParse(String text, int year, int month, int daysInMonth) {
+    final duties = <RosterDuty>[];
+
+    // Find all occurrences of flight patterns with position
+    final allMatches = <({int pos, String flightNum, String? dep, String? arr, String? depTime, String? arrTime})>[];
+
+    // Pattern: AH followed by 3-4 digits, then possibly airports and times
+    final pattern = RegExp(
+      r'AH\s*(\d{3,4})\s+([A-Z]{3})\s*[-–→/]?\s*([A-Z]{3})'
+      r'(?:\s+(\d{2,4}[:.]?\d{2})\s+(\d{2,4}[:.]?\d{2}))?',
+    );
+
+    for (final match in pattern.allMatches(text)) {
+      allMatches.add((
+        pos: match.start,
+        flightNum: 'AH ${match.group(1)!}',
+        dep: match.group(2),
+        arr: match.group(3),
+        depTime: match.group(4),
+        arrTime: match.group(5),
+      ));
+    }
+
+    if (allMatches.isEmpty) return duties;
+
+    // Find all day numbers in text and their positions
+    final dayPositions = <({int pos, int day})>[];
+    final dayPattern = RegExp(r'(?:^|\s)(\d{1,2})(?:\s|$)');
+    for (final match in dayPattern.allMatches(text)) {
+      final day = int.tryParse(match.group(1)!);
+      if (day != null && day >= 1 && day <= daysInMonth) {
+        dayPositions.add((pos: match.start, day: day));
+      }
+    }
+
+    // Associate each flight with the nearest preceding day number
+    for (final flight in allMatches) {
+      int? bestDay;
+      int bestDist = 999999;
+
+      for (final dp in dayPositions) {
+        final dist = flight.pos - dp.pos;
+        if (dist >= 0 && dist < bestDist) {
+          bestDist = dist;
+          bestDay = dp.day;
+        }
+      }
+
+      duties.add(RosterDuty(
+        date: DateTime(year, month, bestDay ?? 1),
+        type: DutyType.flight,
+        flightNumber: flight.flightNum,
+        departure: flight.dep,
+        arrival: flight.arr,
+        checkIn: _timeFromStr(year, month, bestDay ?? 1, flight.depTime),
+        checkOut: _timeFromStr(year, month, bestDay ?? 1, flight.arrTime),
+      ));
+    }
+
+    return duties;
+  }
+
+  // Fill in OFF/RH/SBY days that don't have flights
+  void _fillActivityDays(
+    String text,
+    List<RosterDuty> duties,
+    int year,
+    int month,
+    int daysInMonth,
+    Set<int> coveredDays,
+  ) {
+    // Look for patterns like "RH" or "OFF" near day numbers
+    final tokens = text.split(RegExp(r'\s+'));
+
+    for (int i = 0; i < tokens.length - 1; i++) {
+      final dayNum = int.tryParse(tokens[i]);
+      if (dayNum == null || dayNum < 1 || dayNum > daysInMonth) continue;
+      if (coveredDays.contains(dayNum)) continue;
+
+      final next = tokens[i + 1].toUpperCase();
+      if (_isActivityCode(next)) {
+        duties.add(RosterDuty(
+          date: DateTime(year, month, dayNum),
+          type: _codeToType(next),
+        ));
+        coveredDays.add(dayNum);
+      }
+    }
+
+    // Also scan for "RH" / "OFF" patterns after day-of-week names
+    final actPattern = RegExp(
+      r'(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun|Lu|Ma|Me|Je|Ve|Sa|Di)\.?\s+'
+      r'(RH|OFF|SBY|STBY|DO|JA|C/O)',
+      caseSensitive: false,
+    );
+    // These are harder to associate with specific days without more context
+  }
+
+  // --- Helpers ---
+
+  bool _isActivityCode(String token) {
+    return ['RH', 'OFF', 'SBY', 'STBY', 'STANDBY', 'REPOS', 'REST', 'DO', 'JA', 'C/O']
+        .contains(token.toUpperCase());
+  }
+
+  DutyType _codeToType(String code) {
+    final upper = code.toUpperCase();
+    if (upper == 'SBY' || upper == 'STBY' || upper == 'STANDBY') return DutyType.standby;
+    if (upper == 'OFF' || upper == 'DO' || upper == 'JA') return DutyType.off;
+    return DutyType.rest;
+  }
+
+  String? _extractFlightNum(String token) {
+    final match = RegExp(r'^(?:AH)?(\d{3,4})$').firstMatch(token);
+    if (match != null) {
+      final num = int.tryParse(match.group(1)!);
+      if (num != null && num >= 100) {
+        return 'AH ${match.group(1)!}';
+      }
+    }
+    return null;
+  }
+
+  DateTime? _timeFromStr(int year, int month, int day, String? timeStr) {
+    if (timeStr == null) return null;
+    final cleaned = timeStr.replaceAll(RegExp(r'[.:]'), '');
+    if (cleaned.length < 3) return null;
+    final padded = cleaned.padLeft(4, '0');
+    final h = int.tryParse(padded.substring(0, 2));
+    final m = int.tryParse(padded.substring(2, 4));
+    if (h != null && m != null && h >= 0 && h < 24 && m >= 0 && m < 60) {
+      return DateTime(year, month, day, h, m);
+    }
+    return null;
   }
 
   Map<String, double> _parseStats(String text) {
     final stats = <String, double>{};
 
-    final blockMatch = RegExp(r'Block Hours\s+(\d+):(\d+)').firstMatch(text);
+    final blockMatch = RegExp(r'Block\s*Hours?\s+(\d+):(\d+)').firstMatch(text);
     if (blockMatch != null) {
       stats['blockHours'] = double.parse(blockMatch.group(1)!) +
           double.parse(blockMatch.group(2)!) / 60;
     }
 
-    final dutyMatch = RegExp(r'Duty Hours\s+(\d+):(\d+)').firstMatch(text);
+    final dutyMatch = RegExp(r'Duty\s*Hours?\s+(\d+):(\d+)').firstMatch(text);
     if (dutyMatch != null) {
       stats['dutyHours'] = double.parse(dutyMatch.group(1)!) +
           double.parse(dutyMatch.group(2)!) / 60;
     }
 
-    final landingsMatch = RegExp(r'Landings\s+(\d+)').firstMatch(text);
+    final landingsMatch = RegExp(r'Landings?\s+(\d+)').firstMatch(text);
     if (landingsMatch != null) {
       stats['landings'] = double.parse(landingsMatch.group(1)!);
     }
 
-    final offMatch = RegExp(r'Off Days\s+(\d+)').firstMatch(text);
+    final offMatch = RegExp(r'Off\s*Days?\s+(\d+)').firstMatch(text);
     if (offMatch != null) {
       stats['offDays'] = double.parse(offMatch.group(1)!);
     }
 
-    final flightMatch = RegExp(r'Flight Days\s+(\d+)').firstMatch(text);
+    final flightMatch = RegExp(r'Flight\s*Days?\s+(\d+)').firstMatch(text);
     if (flightMatch != null) {
       stats['flightDays'] = double.parse(flightMatch.group(1)!);
     }
