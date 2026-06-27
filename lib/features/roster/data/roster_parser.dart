@@ -336,58 +336,21 @@ class RosterParser {
       }
     }
 
-    // Step 6: Map airport pairs to days. The airport rows may include
-    // entries for non-flight activities (ESIM, DEPL, ARRT). Dynamically
-    // find which combination of extra days matches the airport row count.
+    // Step 6: Map airport pairs to flight days.
+    // Airport rows only contain data for actual flights. ESIM is a
+    // simulator briefing and does NOT have airport data. Map first N
+    // airports directly to the first N flight days in order.
     final nFlights = flightDayIndices.length;
     final flightRoutes = <int, ({String dep, String arr})>{};
 
     if (airportRows.length >= 2) {
       final depRow = airportRows[0];
       final arrRow = airportRows[1];
-      final depLen = depRow.length;
-
-      // Find the right set of day indices that matches airport count
-      List<int> aptDayIndices = List.of(flightDayIndices);
-
-      if (depLen != nFlights) {
-        // Collect non-flight days that might have airport data
-        const aptActivities = ['ESIM', 'DEPL', 'ARRT'];
-        final extraDays = <int>[];
-        for (final entry in dayActivities.entries) {
-          if (!flightDayIndices.contains(entry.key) &&
-              aptActivities.contains(entry.value)) {
-            extraDays.add(entry.key);
-          }
-        }
-        extraDays.sort();
-
-        // Try adding extra days one at a time until count matches
-        if (depLen > nFlights && extraDays.isNotEmpty) {
-          final candidates = List.of(flightDayIndices);
-          for (final extra in extraDays) {
-            candidates.add(extra);
-            candidates.sort();
-            if (candidates.length == depLen) break;
-          }
-          if (candidates.length == depLen) {
-            aptDayIndices = candidates;
-          }
-        }
-      }
-
-      final n = [depLen, arrRow.length, aptDayIndices.length]
+      final n = [depRow.length, arrRow.length, nFlights]
           .reduce((a, b) => a < b ? a : b);
-      final allRoutes = <int, ({String dep, String arr})>{};
-      for (int i = 0; i < n; i++) {
-        allRoutes[aptDayIndices[i]] = (dep: depRow[i], arr: arrRow[i]);
-      }
 
-      // Extract only flight-day routes
-      for (final fi in flightDayIndices) {
-        if (allRoutes.containsKey(fi)) {
-          flightRoutes[fi] = allRoutes[fi]!;
-        }
+      for (int i = 0; i < n; i++) {
+        flightRoutes[flightDayIndices[i]] = (dep: depRow[i], arr: arrRow[i]);
       }
     }
 
@@ -433,27 +396,42 @@ class RosterParser {
       }
     }
 
-    // Map 2nd-leg flights to flight days (1:1 if counts match)
+    // Match 2nd-leg flights to flight days by route continuity:
+    // The 2nd leg's departure must equal the 1st leg's arrival.
+    // Not every flight day has a 2nd leg (e.g. inbound flights
+    // arriving at base have no return leg).
     final extraLegs = <int, List<({String fn, String? dep, String? arr})>>{};
     if (extraFlightRows.isNotEmpty) {
       final efRow = extraFlightRows[0];
 
-      // 2nd-leg airports: 3rd and 4th airport rows
       List<String>? dep2, arr2;
       if (airportRows.length >= 4) {
         dep2 = airportRows[2];
         arr2 = airportRows[3];
       }
 
-      if (efRow.length == nFlights) {
-        for (int i = 0; i < nFlights; i++) {
-          final di = flightDayIndices[i];
-          extraLegs[di] = [
-            (
-              fn: efRow[i],
-              dep: dep2 != null && i < dep2.length ? dep2[i] : null,
-              arr: arr2 != null && i < arr2.length ? arr2[i] : null,
-            )
+      final matched = <int>{};
+      for (int i = 0; i < efRow.length; i++) {
+        final d2 = dep2 != null && i < dep2.length ? dep2[i] : null;
+        final a2 = arr2 != null && i < arr2.length ? arr2[i] : null;
+
+        int? matchedIdx;
+        if (d2 != null) {
+          // Find first unmatched flight day whose arrival == this departure
+          for (final fi in flightDayIndices) {
+            if (matched.contains(fi)) continue;
+            final route = flightRoutes[fi];
+            if (route != null && route.arr == d2) {
+              matchedIdx = fi;
+              break;
+            }
+          }
+        }
+
+        if (matchedIdx != null) {
+          matched.add(matchedIdx);
+          extraLegs[matchedIdx] = [
+            (fn: efRow[i], dep: d2, arr: a2)
           ];
         }
       }
