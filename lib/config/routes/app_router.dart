@@ -4,11 +4,19 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/calendar/presentation/pages/calendar_page.dart';
 import '../../features/dashboard/presentation/pages/dashboard_page.dart';
+import '../../features/onboarding/presentation/pages/welcome_page.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
+  final hasSeenOnboarding = ref.watch(hasSeenOnboardingProvider);
+
   return GoRouter(
-    initialLocation: '/',
+    initialLocation: hasSeenOnboarding ? '/' : '/welcome',
     routes: [
+      GoRoute(
+        path: '/welcome',
+        name: 'welcome',
+        builder: (context, state) => const WelcomePage(),
+      ),
       ShellRoute(
         builder: (context, state, child) => _MainShell(child: child),
         routes: [
