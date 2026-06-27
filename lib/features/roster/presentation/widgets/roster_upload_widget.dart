@@ -26,9 +26,37 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
   String _extractTextFromPdf(Uint8List bytes) {
     final document = PdfDocument(inputBytes: bytes);
     final extractor = PdfTextExtractor(document);
-    final text = extractor.extractText();
+
+    final sb = StringBuffer();
+    for (int page = 0; page < document.pages.count; page++) {
+      try {
+        final lines = extractor.extractTextLines(
+          startPageIndex: page,
+          endPageIndex: page,
+        );
+
+        final rows = <int, List<({double x, String text})>>{};
+        for (final line in lines) {
+          final yKey = (line.bounds.top / 4).round();
+          rows.putIfAbsent(yKey, () => []);
+          rows[yKey]!.add((x: line.bounds.left, text: line.text.trim()));
+        }
+
+        final sortedKeys = rows.keys.toList()..sort();
+        for (final key in sortedKeys) {
+          final cells = rows[key]!
+            ..sort((a, b) => a.x.compareTo(b.x));
+          sb.writeln(cells.map((c) => c.text).join('\t'));
+        }
+      } catch (_) {
+        sb.writeln(
+          extractor.extractText(startPageIndex: page, endPageIndex: page),
+        );
+      }
+    }
+
     document.dispose();
-    return text;
+    return sb.toString();
   }
 
   Future<void> _pickAndLoadPdf() async {

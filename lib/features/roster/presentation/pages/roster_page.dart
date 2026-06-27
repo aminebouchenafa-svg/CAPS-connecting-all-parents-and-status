@@ -685,21 +685,38 @@ class _HorizontalDayBlock extends StatelessWidget {
                       ),
                     ],
 
-                    const Spacer(),
-
-                    // Indicators for notes/tasks
-                    if (note != null || (tasks != null && tasks!.isNotEmpty))
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          if (note != null)
-                            Icon(Icons.sticky_note_2, size: 12, color: color.withValues(alpha: 0.6)),
-                          if (tasks != null && tasks!.isNotEmpty) ...[
-                            const SizedBox(width: 2),
-                            Icon(Icons.checklist, size: 12, color: color.withValues(alpha: 0.6)),
+                    // Tasks visible in block
+                    if (tasks != null && tasks!.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      ...tasks!.take(3).map((task) => Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Row(
+                          children: [
+                            Icon(Icons.check_circle_outline, size: 10, color: color.withValues(alpha: 0.7)),
+                            const SizedBox(width: 3),
+                            Expanded(
+                              child: Text(
+                                task,
+                                style: TextStyle(fontSize: 8, color: Colors.grey[700]),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           ],
-                        ],
-                      ),
+                        ),
+                      )),
+                      if (tasks!.length > 3)
+                        Text(
+                          '+${tasks!.length - 3}',
+                          style: TextStyle(fontSize: 8, color: Colors.grey[500]),
+                        ),
+                    ],
+
+                    // Note indicator
+                    if (note != null) ...[
+                      const Spacer(),
+                      Icon(Icons.sticky_note_2, size: 12, color: color.withValues(alpha: 0.5)),
+                    ],
                   ],
                 ),
               ),

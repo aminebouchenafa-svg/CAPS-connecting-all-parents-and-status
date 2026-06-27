@@ -116,15 +116,20 @@ class RosterParser {
     final month = periodStart.month;
     final daysInMonth = DateTime(year, month + 1, 0).day;
 
-    // Strategy 1: row-based (one duty per line with day number)
-    var duties = _tryRowParse(text, year, month, daysInMonth);
+    // Strategy 1: grid-based (tab-separated columns from PDF layout)
+    var duties = _tryGridParse(text, year, month, daysInMonth);
 
-    // Strategy 2: token-based (find day+flight+airport sequences)
+    // Strategy 2: row-based (one duty per line with day number)
+    if (duties.isEmpty) {
+      duties = _tryRowParse(text, year, month, daysInMonth);
+    }
+
+    // Strategy 3: token-based (find day+flight+airport sequences)
     if (duties.isEmpty) {
       duties = _tryTokenParse(text, year, month, daysInMonth);
     }
 
-    // Strategy 3: find flights by proximity to day numbers
+    // Strategy 4: find flights by proximity to day numbers
     if (duties.isEmpty) {
       duties = _tryProximityParse(text, year, month, daysInMonth);
     }
@@ -145,7 +150,150 @@ class RosterParser {
     return duties;
   }
 
-  // Strategy 1: Each line contains day + flight info or day + activity
+  // Strategy: Grid-based parsing from tab-separated PDF extraction
+  List<RosterDuty> _tryGridParse(String text, int year, int month, int daysInMonth) {
+    final duties = <RosterDuty>[];
+    final lines = text.split('\n');
+
+    // Find the row containing day numbers (1, 2, 3, ... or 01, 02, 03, ...)
+    int? dayRowIdx;
+    List<int> dayNumbers = [];
+    Map<int, int> dayToCol = {};
+
+    for (int i = 0; i < lines.length; i++) {
+      final cells = lines[i].split('\t').map((c) => c.trim()).toList();
+      if (cells.length < 5) continue;
+
+      int consecutiveCount = 0;
+      int? prevDay;
+      final tempDayToCol = <int, int>{};
+
+      for (int j = 0; j < cells.length; j++) {
+        final num = int.tryParse(cells[j]);
+        if (num != null && num >= 1 && num <= 31) {
+          if (prevDay == null || num == prevDay + 1) {
+            consecutiveCount++;
+          }
+          prevDay = num;
+          tempDayToCol[num] = j;
+        }
+      }
+
+      if (consecutiveCount >= 5 && tempDayToCol.length >= 5) {
+        dayRowIdx = i;
+        dayToCol = tempDayToCol;
+        dayNumbers = tempDayToCol.keys.toList()..sort();
+        break;
+      }
+    }
+
+    if (dayRowIdx == null) return duties;
+
+    // Collect data from rows below the day row for each column
+    final dayData = <int, List<String>>{};
+    for (final day in dayNumbers) {
+      dayData[day] = [];
+    }
+
+    for (int i = dayRowIdx + 1; i < lines.length; i++) {
+      final cells = lines[i].split('\t').map((c) => c.trim()).toList();
+      if (cells.isEmpty) continue;
+
+      // Stop if we hit the stats section
+      if (cells.any((c) => c.contains('Block') || c.contains('Duty') || c.contains('Landing'))) {
+        break;
+      }
+
+      for (final entry in dayToCol.entries) {
+        final day = entry.key;
+        final col = entry.value;
+        if (col < cells.length && cells[col].isNotEmpty) {
+          dayData[day]!.add(cells[col]);
+        }
+      }
+    }
+
+    // Parse each day's collected data
+    for (final entry in dayData.entries) {
+      final day = entry.key;
+      if (day > daysInMonth) continue;
+      final values = entry.value;
+      if (values.isEmpty) continue;
+
+      // Check for activity codes
+      final actIdx = values.indexWhere((v) => _isActivityCode(v.toUpperCase()));
+      if (actIdx >= 0) {
+        duties.add(RosterDuty(
+          date: DateTime(year, month, day),
+          type: _codeToType(values[actIdx].toUpperCase()),
+        ));
+        continue;
+      }
+
+      // Extract flight data from column values
+      final flightDuties = _parseColumnValues(values, year, month, day);
+      if (flightDuties.isNotEmpty) {
+        duties.addAll(flightDuties);
+      }
+    }
+
+    return duties;
+  }
+
+  List<RosterDuty> _parseColumnValues(List<String> values, int year, int month, int day) {
+    final duties = <RosterDuty>[];
+    final flightNums = <String>[];
+    final airports = <String>[];
+    final times = <DateTime>[];
+
+    for (final v in values) {
+      final upper = v.toUpperCase().trim();
+
+      // Flight number: AH1069, AH 1069, 1069, etc.
+      final fn = _extractFlightNum(upper);
+      if (fn != null) {
+        flightNums.add(fn);
+        continue;
+      }
+
+      // Airport code
+      if (RegExp(r'^[A-Z]{3}$').hasMatch(upper) && !_isActivityCode(upper)) {
+        airports.add(upper);
+        continue;
+      }
+
+      // Time: 0530, 05:30, 05.30, 530
+      final time = _timeFromStr(year, month, day, v.replaceAll(RegExp(r'[hH]'), ':'));
+      if (time != null) {
+        times.add(time);
+        continue;
+      }
+    }
+
+    if (flightNums.isEmpty) return duties;
+
+    // Match flight numbers with airport pairs and time pairs
+    for (int i = 0; i < flightNums.length; i++) {
+      final dep = (i * 2) < airports.length ? airports[i * 2] : null;
+      final arr = (i * 2 + 1) < airports.length ? airports[i * 2 + 1] : null;
+      final checkIn = (i * 2) < times.length ? times[i * 2] : null;
+      final checkOut = (i * 2 + 1) < times.length ? times[i * 2 + 1] : null;
+
+      duties.add(RosterDuty(
+        date: DateTime(year, month, day),
+        type: DutyType.flight,
+        flightNumber: flightNums[i],
+        departure: dep,
+        arrival: arr,
+        checkIn: checkIn,
+        checkOut: checkOut,
+      ));
+    }
+
+    return duties;
+  }
+
+  // Strategy: Each line contains day + flight info or day + activity
   List<RosterDuty> _tryRowParse(String text, int year, int month, int daysInMonth) {
     final duties = <RosterDuty>[];
     final lines = text.split(RegExp(r'[\r\n]+'));
