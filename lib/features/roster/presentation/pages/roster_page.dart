@@ -22,14 +22,45 @@ class RosterPage extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Mon Roster'),
         actions: [
-          if (roster != null)
+          if (roster != null) ...[
             IconButton(
-              icon: const Icon(Icons.refresh),
-              tooltip: 'Recharger',
-              onPressed: () {
-                ref.read(rosterProvider.notifier).state = null;
+              icon: const Icon(Icons.swap_horiz),
+              tooltip: 'Remplacer le roster',
+              onPressed: () => _showUploadSheet(context),
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              tooltip: 'Effacer le roster',
+              onPressed: () async {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Effacer le roster ?'),
+                    content: const Text(
+                      'Le roster actuel sera supprimé. '
+                      'Vous pourrez en charger un nouveau ensuite.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Annuler'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.red,
+                        ),
+                        child: const Text('Effacer'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirm == true) {
+                  ref.read(rosterProvider.notifier).state = null;
+                }
               },
             ),
+          ],
         ],
       ),
       body: roster == null
