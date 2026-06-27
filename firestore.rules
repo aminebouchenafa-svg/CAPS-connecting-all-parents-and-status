@@ -1,0 +1,38 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users can only read/write their own profile
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Household data: only members can access
+    match /households/{householdId} {
+      allow read: if isHouseholdMember(householdId);
+
+      match /flight_statuses/{statusId} {
+        allow read: if isHouseholdMember(householdId);
+        allow write: if isHouseholdMember(householdId) && isPilot();
+      }
+
+      match /calendar_events/{eventId} {
+        allow read: if isHouseholdMember(householdId);
+        allow create: if isHouseholdMember(householdId);
+        allow update, delete: if isHouseholdMember(householdId)
+          && resource.data.createdByUid == request.auth.uid;
+      }
+    }
+
+    function isHouseholdMember(householdId) {
+      return request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.householdId == householdId;
+    }
+
+    function isPilot() {
+      return request.auth != null
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'pilot';
+    }
+  }
+}
