@@ -123,7 +123,11 @@ class RosterParser {
     final month = periodStart.month;
     final daysInMonth = DateTime(year, month + 1, 0).day;
 
-    var duties = _tryGridParse(text, year, month, daysInMonth);
+    var duties = _trySequentialParse(text, year, month, daysInMonth);
+
+    if (duties.isEmpty) {
+      duties = _tryGridParse(text, year, month, daysInMonth);
+    }
 
     if (duties.isEmpty) {
       duties = _tryRowParse(text, year, month, daysInMonth);
@@ -148,6 +152,315 @@ class RosterParser {
       }
       return 0;
     });
+
+    return duties;
+  }
+
+  // ── Strategy 0: Sequential parse for AvioDev plain-text extraction ──
+
+  static final _monthAbbr = {
+    'Jan': 1, 'Feb': 2, 'Mar': 3, 'Apr': 4, 'May': 5, 'Jun': 6,
+    'Jul': 7, 'Aug': 8, 'Sep': 9, 'Oct': 10, 'Nov': 11, 'Dec': 12,
+  };
+
+  static final _dayOfWeek = RegExp(
+    r'^(Mon|Tue|Wed|Thu|Fri|Sat|Sun|Lun|Mar|Mer|Jeu|Ven|Sam|Dim)$',
+    caseSensitive: false,
+  );
+
+  static final _timePattern = RegExp(r'^(\d{2}):(\d{2})$');
+
+  static final _airportPattern = RegExp(r'^\*?([A-Z]{3})\*?$');
+
+  List<RosterDuty> _trySequentialParse(
+      String text, int year, int month, int daysInMonth) {
+    final lines = text.split('\n');
+
+    // Step 1: Find the date row ("01 Jun 02 Jun 03 Jun ...")
+    int dateRowIdx = -1;
+    final dayDates = <DateTime>[];
+
+    for (int i = 0; i < lines.length; i++) {
+      final line = lines[i].trim();
+      final dateMatches = RegExp(
+              r'(\d{2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)')
+          .allMatches(line)
+          .toList();
+
+      if (dateMatches.length >= 15) {
+        dateRowIdx = i;
+        for (final m in dateMatches) {
+          final day = int.parse(m.group(1)!);
+          final mon = _monthAbbr[m.group(2)!]!;
+          int y = year;
+          if (mon < month) y = year + 1;
+          dayDates.add(DateTime(y, mon, day));
+        }
+        break;
+      }
+    }
+
+    if (dateRowIdx < 0 || dayDates.isEmpty) return [];
+
+    // Step 2: Find the activity row (skip day-of-week row)
+    int activityRowIdx = -1;
+    for (int i = dateRowIdx + 1; i < lines.length; i++) {
+      final line = lines[i].trim();
+      if (line.isEmpty) continue;
+
+      final tokens = line.split(RegExp(r'\s+'));
+
+      if (tokens.length >= 15 && tokens.every((t) => _dayOfWeek.hasMatch(t))) {
+        continue;
+      }
+
+      final actCount = tokens.where((t) {
+        final upper = t.toUpperCase();
+        return _avioDevCodes.contains(upper) ||
+            _extractFlightNum(upper) != null;
+      }).length;
+
+      if (actCount >= 5) {
+        activityRowIdx = i;
+        break;
+      }
+    }
+
+    if (activityRowIdx < 0) return [];
+
+    // Step 3: Parse the activity row - map each token to a day index
+    final actTokens = lines[activityRowIdx].trim().split(RegExp(r'\s+'));
+    final dayActivities = <int, String>{};
+    final flightDayIndices = <int>[];
+    int dayIdx = 0;
+
+    for (int t = 0; t < actTokens.length && dayIdx < dayDates.length; t++) {
+      final token = actTokens[t];
+      final upper = token.toUpperCase();
+
+      if (_dayOfWeek.hasMatch(token) || _monthAbbr.containsKey(token)) {
+        continue;
+      }
+
+      if (_avioDevCodes.contains(upper)) {
+        dayActivities[dayIdx] = upper;
+        dayIdx++;
+      } else if (_extractFlightNum(upper) != null) {
+        dayActivities[dayIdx] = upper;
+        flightDayIndices.add(dayIdx);
+        dayIdx++;
+      } else {
+        dayActivities[dayIdx] = upper;
+        dayIdx++;
+      }
+    }
+
+    if (dayActivities.isEmpty) return [];
+
+    // Step 4: Collect data lines between activity row and stats section.
+    // Skip duplicate partial activity rows (PDF extraction artifact).
+    final actRowText = lines[activityRowIdx].trim();
+    final dataLines = <String>[];
+    for (int i = activityRowIdx + 1; i < lines.length; i++) {
+      final line = lines[i].trim();
+      if (line.isEmpty) continue;
+      final lower = line.toLowerCase();
+      if (lower.contains('block hours') ||
+          lower.contains('duty hours') ||
+          lower.contains('code explanations') ||
+          lower.contains('totals') ||
+          lower.contains('other training') ||
+          lower.contains('code|description') ||
+          RegExp(r'page\s+\d').hasMatch(lower)) {
+        break;
+      }
+      // Skip if this line is a substring of the activity row (duplicate artifact)
+      if (line.length > 10 && actRowText.contains(line)) continue;
+      dataLines.add(line);
+    }
+
+    // Step 5: Extract airport rows and map to flight days
+    // Airport rows are lines where majority of tokens are 3-letter codes.
+    // They appear in pairs: departure row then arrival row.
+    final airportRows = <List<String>>[];
+    for (final dl in dataLines) {
+      final tokens = dl.split(RegExp(r'\s+'));
+      if (tokens.length < 3) continue;
+      int aptCount = 0;
+      final apts = <String>[];
+      for (final t in tokens) {
+        final m = _airportPattern.firstMatch(t.toUpperCase());
+        if (m != null && !_avioDevCodes.contains(m.group(1))) {
+          aptCount++;
+          apts.add(m.group(1)!);
+        }
+      }
+      if (aptCount >= 3 && aptCount > tokens.length * 0.6) {
+        airportRows.add(apts);
+      }
+    }
+
+    // Map airport pairs (dep, arr) to flight days
+    final flightRoutes = <int, ({String dep, String arr})>{};
+    final nFlights = flightDayIndices.length;
+    if (airportRows.length >= 2 &&
+        airportRows[0].length == nFlights &&
+        airportRows[1].length == nFlights) {
+      for (int i = 0; i < nFlights; i++) {
+        flightRoutes[flightDayIndices[i]] = (
+          dep: airportRows[0][i],
+          arr: airportRows[1][i],
+        );
+      }
+    } else if (airportRows.length >= 2) {
+      // Counts don't match perfectly - try mapping the minimum
+      final depRow = airportRows[0];
+      final arrRow = airportRows[1];
+      final n = [depRow.length, arrRow.length, nFlights].reduce(
+          (a, b) => a < b ? a : b);
+      for (int i = 0; i < n; i++) {
+        flightRoutes[flightDayIndices[i]] = (
+          dep: depRow[i],
+          arr: arrRow[i],
+        );
+      }
+    }
+
+    // Step 6: Extract time rows and map to flight days
+    final timeRows = <List<String>>[];
+    for (final dl in dataLines) {
+      final tokens = dl.split(RegExp(r'\s+'));
+      if (tokens.length < 3) continue;
+      int timeCount = 0;
+      final times = <String>[];
+      for (final t in tokens) {
+        if (_timePattern.hasMatch(t)) {
+          timeCount++;
+          times.add(t);
+        }
+      }
+      if (timeCount >= 3 && timeCount > tokens.length * 0.6) {
+        timeRows.add(times);
+      }
+    }
+
+    final flightTimes = <int, ({String checkIn, String checkOut})>{};
+    if (timeRows.length >= 2 &&
+        timeRows[0].length == nFlights &&
+        timeRows[1].length == nFlights) {
+      for (int i = 0; i < nFlights; i++) {
+        flightTimes[flightDayIndices[i]] = (
+          checkIn: timeRows[0][i],
+          checkOut: timeRows[1][i],
+        );
+      }
+    }
+
+    // Step 7: Extract 2nd-leg flight numbers
+    final extraFlightRows = <List<String>>[];
+    for (final dl in dataLines) {
+      final tokens = dl.split(RegExp(r'\s+'));
+      if (tokens.length < 3) continue;
+      int fnCount = 0;
+      final fns = <String>[];
+      for (final t in tokens) {
+        final fn = _extractFlightNum(t.toUpperCase());
+        if (fn != null) {
+          fnCount++;
+          fns.add(fn);
+        }
+      }
+      if (fnCount >= 3 && fnCount > tokens.length * 0.5) {
+        extraFlightRows.add(fns);
+      }
+    }
+
+    // Map 2nd-leg flights + routes
+    final extraLegs = <int, List<({String fn, String? dep, String? arr})>>{};
+    if (extraFlightRows.isNotEmpty) {
+      final efRow = extraFlightRows[0];
+      // 2nd-leg airports are in the 3rd and 4th airport rows
+      List<String>? dep2, arr2;
+      if (airportRows.length >= 4) {
+        dep2 = airportRows[2];
+        arr2 = airportRows[3];
+      }
+      // Match extra flights to flight days that are likely multi-leg
+      // We can't know exactly which flight days have 2nd legs without column
+      // alignment, so just store them indexed by position
+      final n2 = efRow.length;
+      int flightIdx = 0;
+      for (int i = 0; i < n2 && flightIdx < nFlights; i++) {
+        final di = flightDayIndices[flightIdx];
+        extraLegs.putIfAbsent(di, () => []);
+        extraLegs[di]!.add((
+          fn: efRow[i],
+          dep: dep2 != null && i < dep2.length ? dep2[i] : null,
+          arr: arr2 != null && i < arr2.length ? arr2[i] : null,
+        ));
+        flightIdx++;
+      }
+    }
+
+    // Step 8: Build duties
+    final duties = <RosterDuty>[];
+
+    for (final entry in dayActivities.entries) {
+      final di = entry.key;
+      if (di >= dayDates.length) continue;
+      final date = dayDates[di];
+      if (date.month != month || date.day > daysInMonth) continue;
+
+      final upper = entry.value;
+
+      if (_avioDevCodes.contains(upper)) {
+        duties.add(RosterDuty(
+          date: date,
+          type: _avioDevType(upper),
+          notes: _avioDevLabel(upper),
+        ));
+        continue;
+      }
+
+      final fn = _extractFlightNum(upper);
+      if (fn != null) {
+        final route = flightRoutes[di];
+        final times = flightTimes[di];
+
+        duties.add(RosterDuty(
+          date: date,
+          type: DutyType.flight,
+          flightNumber: fn,
+          departure: route?.dep,
+          arrival: route?.arr,
+          checkIn: _timeFromStr(
+              date.year, date.month, date.day, times?.checkIn),
+          checkOut: _timeFromStr(
+              date.year, date.month, date.day, times?.checkOut),
+        ));
+
+        // Add 2nd leg if available
+        final extras = extraLegs[di];
+        if (extras != null) {
+          for (final leg in extras) {
+            duties.add(RosterDuty(
+              date: date,
+              type: DutyType.flight,
+              flightNumber: leg.fn,
+              departure: leg.dep,
+              arrival: leg.arr,
+            ));
+          }
+        }
+        continue;
+      }
+
+      duties.add(RosterDuty(
+        date: date,
+        type: DutyType.off,
+        notes: upper,
+      ));
+    }
 
     return duties;
   }
