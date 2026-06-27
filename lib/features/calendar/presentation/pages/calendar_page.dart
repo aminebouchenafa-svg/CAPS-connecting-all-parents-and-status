@@ -4,37 +4,75 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/caps_card.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../domain/entities/calendar_event.dart';
+import '../providers/calendar_provider.dart';
+import '../widgets/add_event_sheet.dart';
 
 class CalendarPage extends ConsumerWidget {
   const CalendarPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Calendrier Familial')),
-      body: Column(
-        children: [
-          CalendarDatePicker(
-            initialDate: DateTime.now(),
-            firstDate: DateTime.now().subtract(const Duration(days: 365)),
-            lastDate: DateTime.now().add(const Duration(days: 365)),
-            onDateChanged: (date) {
-              // TODO: Load events for selected date
-            },
+    final authState = ref.watch(authStateProvider);
+
+    return authState.when(
+      data: (user) {
+        if (user == null) return const SizedBox.shrink();
+
+        final eventsAsync =
+            ref.watch(calendarEventsProvider(user.householdId));
+        final selectedDate = ref.watch(selectedDateProvider);
+
+        return Scaffold(
+          appBar: AppBar(title: const Text('Calendrier Familial')),
+          body: Column(
+            children: [
+              CalendarDatePicker(
+                initialDate: selectedDate,
+                firstDate:
+                    DateTime.now().subtract(const Duration(days: 365)),
+                lastDate: DateTime.now().add(const Duration(days: 365)),
+                onDateChanged: (date) {
+                  ref.read(selectedDateProvider.notifier).state = date;
+                },
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: eventsAsync.when(
+                  data: (allEvents) {
+                    final dayEvents = ref.watch(
+                        eventsForSelectedDateProvider(allEvents));
+                    return _EventsList(events: dayEvents);
+                  },
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
+                  error: (e, _) => Center(child: Text('Erreur: $e')),
+                ),
+              ),
+            ],
           ),
-          Expanded(
-            child: _EventsList(events: const []),
+          floatingActionButton: FloatingActionButton(
+            onPressed: () => _showAddEventSheet(context, user.householdId),
+            backgroundColor: AppColors.accent,
+            child: const Icon(Icons.add),
           ),
-        ],
+        );
+      },
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (e, _) => Scaffold(body: Center(child: Text('Erreur: $e'))),
+    );
+  }
+
+  void _showAddEventSheet(BuildContext context, String householdId) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          // TODO: Navigate to add event
-        },
-        backgroundColor: AppColors.accent,
-        child: const Icon(Icons.add),
-      ),
+      builder: (_) => AddEventSheet(householdId: householdId),
     );
   }
 }
@@ -54,7 +92,7 @@ class _EventsList extends StatelessWidget {
             Icon(Icons.event_available, size: 48, color: Colors.grey[400]),
             const SizedBox(height: 8),
             Text(
-              'Aucun événement',
+              'Aucun événement ce jour',
               style: AppTextStyles.body.copyWith(color: Colors.grey),
             ),
           ],
@@ -67,33 +105,50 @@ class _EventsList extends StatelessWidget {
       itemCount: events.length,
       itemBuilder: (context, index) {
         final event = events[index];
-        return CapsCard(
-          child: Row(
-            children: [
-              Container(
-                width: 4,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: _eventColor(event.type),
-                  borderRadius: BorderRadius.circular(2),
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: CapsCard(
+            child: Row(
+              children: [
+                Container(
+                  width: 4,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: _eventColor(event.type),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(event.title, style: AppTextStyles.bodyBold),
-                    Text(event.type.label, style: AppTextStyles.caption),
-                  ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(event.title, style: AppTextStyles.bodyBold),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${event.type.label} • ${_formatTime(event.startDate)} - ${_formatTime(event.endDate)}',
+                        style: AppTextStyles.caption,
+                      ),
+                      if (event.description != null &&
+                          event.description!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(event.description!,
+                              style: AppTextStyles.caption),
+                        ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
     );
   }
+
+  String _formatTime(DateTime dt) =>
+      '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
 
   Color _eventColor(EventType type) => switch (type) {
         EventType.rotation => AppColors.statusEnVol,
