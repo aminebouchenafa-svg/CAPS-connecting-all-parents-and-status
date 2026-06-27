@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../features/calendar/presentation/pages/calendar_page.dart';
 import '../../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../../features/onboarding/presentation/pages/welcome_page.dart';
+import '../../features/roster/presentation/pages/roster_page.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final hasSeenOnboarding = ref.watch(hasSeenOnboardingProvider);
@@ -29,6 +30,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: '/calendar',
             name: 'calendar',
             builder: (context, state) => const CalendarPage(),
+          ),
+          GoRoute(
+            path: '/roster',
+            name: 'roster',
+            builder: (context, state) => const RosterPage(),
           ),
         ],
       ),
@@ -59,6 +65,11 @@ class _MainShell extends StatelessWidget {
             selectedIcon: Icon(Icons.calendar_month),
             label: 'Calendrier',
           ),
+          NavigationDestination(
+            icon: Icon(Icons.flight_outlined),
+            selectedIcon: Icon(Icons.flight),
+            label: 'Roster',
+          ),
         ],
       ),
     );
@@ -67,6 +78,7 @@ class _MainShell extends StatelessWidget {
   int _currentIndex(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
     if (location.startsWith('/calendar')) return 1;
+    if (location.startsWith('/roster')) return 2;
     return 0;
   }
 
@@ -76,6 +88,8 @@ class _MainShell extends StatelessWidget {
         context.goNamed('dashboard');
       case 1:
         context.goNamed('calendar');
+      case 2:
+        context.goNamed('roster');
     }
   }
 }
