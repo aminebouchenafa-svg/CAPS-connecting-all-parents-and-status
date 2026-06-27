@@ -30,7 +30,7 @@ jobs:
         run: flutter pub get
 
       - name: Build web
-        run: flutter build web --release --web-renderer canvaskit --base-href /CAPS-connecting-all-parents-and-status/
+        run: flutter build web --release --base-href /CAPS-connecting-all-parents-and-status/
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
@@ -47,4 +47,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-# Trigger build
