@@ -11,6 +11,17 @@ import '../widgets/roster_upload_widget.dart';
 const _dayNamesFull = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
 const _monthNames = ['', 'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 
+const _availableColors = <String, Color>{
+  'Bleu (Vol)': Color(0xFF2980B9),
+  'Vert (Repos)': Color(0xFF27AE60),
+  'Orange (Standby)': Color(0xFFF39C12),
+  'Rouge': Color(0xFFE74C3C),
+  'Violet': Color(0xFF8E44AD),
+  'Rose': Color(0xFFE91E63),
+  'Gris': Color(0xFF95A5A6),
+  'Turquoise': Color(0xFF1ABC9C),
+};
+
 class RosterPage extends ConsumerWidget {
   const RosterPage({super.key});
 
@@ -116,6 +127,8 @@ class _RosterCalendar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final notes = ref.watch(dutyNotesProvider);
+    final tasks = ref.watch(dutyTasksProvider);
+    final customColors = ref.watch(dutyColorsProvider);
     final start = roster.periodStart;
     final end = roster.periodEnd;
 
@@ -124,70 +137,19 @@ class _RosterCalendar extends ConsumerWidget {
       days.add(d);
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 100),
-      itemCount: days.length + 1,
-      itemBuilder: (context, index) {
-        if (index == 0) {
-          return _buildHeader(ref);
-        }
-        final date = days[index - 1];
-        final duties = roster.dutiesForDate(date);
-        final noteKey = '${date.year}-${date.month}-${date.day}';
-        final note = notes[noteKey];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: _buildHeader(),
+        ),
 
-        return _DayBlock(
-          date: date,
-          duties: duties,
-          note: note,
-          onTap: () => _showDayDetail(context, ref, date, duties, notes),
-        );
-      },
-    );
-  }
-
-  Widget _buildHeader(WidgetRef ref) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      roster.pilotName.isNotEmpty ? roster.pilotName : 'Pilote',
-                      style: AppTextStyles.bodyBold,
-                    ),
-                    Text(
-                      '${roster.aircraft} • Base ${roster.base}',
-                      style: AppTextStyles.caption,
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  '${_monthNames[roster.periodStart.month]} ${roster.periodStart.year}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Row(
+        // Stats
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+          child: Row(
             children: [
               _MiniStat(label: 'Vols', value: '${roster.flightDays}j', color: AppColors.statusEnVol),
               const SizedBox(width: 6),
@@ -198,20 +160,83 @@ class _RosterCalendar extends ConsumerWidget {
               _MiniStat(label: 'Atterr.', value: '${roster.totalLandings}', color: AppColors.primary),
             ],
           ),
-        ],
-      ),
+        ),
+
+        // Horizontal scrolling blocks
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 100),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: days.map((date) {
+                final duties = roster.dutiesForDate(date);
+                final noteKey = '${date.year}-${date.month}-${date.day}';
+                final note = notes[noteKey];
+                final dayTasks = tasks[noteKey];
+                final customColor = customColors[noteKey];
+
+                return _HorizontalDayBlock(
+                  date: date,
+                  duties: duties,
+                  note: note,
+                  tasks: dayTasks,
+                  customColor: customColor,
+                  onTap: () => _showDayDetail(context, ref, date, duties, notes, tasks, customColors),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
-  void _showDayDetail(BuildContext context, WidgetRef ref, DateTime date, List<RosterDuty> duties, Map<String, String> existingNotes) {
+  Widget _buildHeader() {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                roster.pilotName.isNotEmpty ? roster.pilotName : 'Pilote',
+                style: AppTextStyles.bodyBold,
+              ),
+              Text('${roster.aircraft} • Base ${roster.base}', style: AppTextStyles.caption),
+            ],
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: AppColors.primary,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            '${_monthNames[roster.periodStart.month]} ${roster.periodStart.year}',
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showDayDetail(
+    BuildContext context,
+    WidgetRef ref,
+    DateTime date,
+    List<RosterDuty> duties,
+    Map<String, String> existingNotes,
+    Map<String, List<String>> existingTasks,
+    Map<String, int> existingColors,
+  ) {
     final noteKey = '${date.year}-${date.month}-${date.day}';
     final dayName = _dayNamesFull[date.weekday - 1];
     final noteController = TextEditingController(text: existingNotes[noteKey] ?? '');
     final taskController = TextEditingController();
-
-    final existingTasks = List<String>.from(
-      ref.read(dutyTasksProvider)[noteKey] ?? <String>[],
-    );
+    final localTasks = List<String>.from(existingTasks[noteKey] ?? <String>[]);
+    int? selectedColorIndex = existingColors[noteKey];
 
     showModalBottomSheet(
       context: context,
@@ -220,195 +245,230 @@ class _RosterCalendar extends ConsumerWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setSheetState) => Padding(
-          padding: EdgeInsets.only(
-            left: 20, right: 20, top: 16,
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40, height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(2),
+        builder: (ctx, setSheetState) {
+          final currentColor = selectedColorIndex != null
+              ? _availableColors.values.elementAt(selectedColorIndex!)
+              : _defaultDutyColor(duties);
+
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 20, right: 20, top: 16,
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40, height: 4,
+                      decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
                     ),
                   ),
-                ),
-                const SizedBox(height: 12),
+                  const SizedBox(height: 12),
 
-                // Day header
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: _dutyColor(duties).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        '${date.day}',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w900,
-                          color: _dutyColor(duties),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(dayName, style: AppTextStyles.heading3),
-                        Text(
-                          '${_monthNames[date.month]} ${date.year}',
-                          style: AppTextStyles.caption,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                // Duties
-                if (duties.isEmpty)
-                  _infoBox(Icons.event_busy, 'Pas d\'activité programmée', Colors.grey)
-                else
-                  ...duties.map((duty) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: _dutyDetailCard(duty),
-                  )),
-
-                const SizedBox(height: 16),
-                const Divider(),
-                const SizedBox(height: 8),
-
-                // Tasks
-                Row(
-                  children: [
-                    Icon(Icons.checklist, size: 20, color: AppColors.primary),
-                    const SizedBox(width: 8),
-                    Text('Tâches', style: AppTextStyles.bodyBold),
-                  ],
-                ),
-                const SizedBox(height: 8),
-
-                ...existingTasks.asMap().entries.map((entry) => Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Row(
+                  // Day header
+                  Row(
                     children: [
-                      Icon(Icons.check_circle, size: 18, color: AppColors.statusRepos),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(entry.value, style: AppTextStyles.body)),
-                      GestureDetector(
-                        onTap: () {
-                          setSheetState(() => existingTasks.removeAt(entry.key));
-                        },
-                        child: Icon(Icons.close, size: 16, color: Colors.grey[400]),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: currentColor.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: currentColor),
+                        ),
+                        child: Text(
+                          '${date.day}',
+                          style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: currentColor),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(dayName, style: AppTextStyles.heading3),
+                          Text('${_monthNames[date.month]} ${date.year}', style: AppTextStyles.caption),
+                        ],
                       ),
                     ],
                   ),
-                )),
+                  const SizedBox(height: 16),
 
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: taskController,
-                        decoration: InputDecoration(
-                          hintText: 'Ajouter une tâche...',
-                          hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
+                  // Duty info
+                  if (duties.isEmpty)
+                    _infoBox(Icons.event_busy, 'Pas d\'activité programmée', Colors.grey)
+                  else
+                    ...duties.map((duty) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _dutyDetailCard(duty),
+                    )),
+
+                  const SizedBox(height: 16),
+
+                  // Color picker
+                  Row(
+                    children: [
+                      Icon(Icons.palette, size: 20, color: AppColors.primary),
+                      const SizedBox(width: 8),
+                      Text('Couleur du bloc', style: AppTextStyles.bodyBold),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _availableColors.entries.toList().asMap().entries.map((entry) {
+                      final idx = entry.key;
+                      final color = entry.value.value;
+                      final label = entry.value.key;
+                      final isSelected = selectedColorIndex == idx;
+
+                      return GestureDetector(
+                        onTap: () => setSheetState(() => selectedColorIndex = isSelected ? null : idx),
+                        child: Column(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: color.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: color,
+                                  width: isSelected ? 3 : 1,
+                                ),
+                              ),
+                              child: isSelected
+                                  ? Icon(Icons.check, size: 20, color: color)
+                                  : null,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              label.split(' ').first,
+                              style: TextStyle(fontSize: 9, color: Colors.grey[600]),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 8),
+
+                  // Tasks
+                  Row(
+                    children: [
+                      Icon(Icons.checklist, size: 20, color: AppColors.primary),
+                      const SizedBox(width: 8),
+                      Text('Tâches', style: AppTextStyles.bodyBold),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  ...localTasks.asMap().entries.map((entry) => Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      children: [
+                        Icon(Icons.check_circle, size: 18, color: AppColors.statusRepos),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(entry.value, style: AppTextStyles.body)),
+                        GestureDetector(
+                          onTap: () => setSheetState(() => localTasks.removeAt(entry.key)),
+                          child: Icon(Icons.close, size: 16, color: Colors.grey[400]),
+                        ),
+                      ],
+                    ),
+                  )),
+
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: taskController,
+                          decoration: InputDecoration(
+                            hintText: 'Ajouter une tâche...',
+                            hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            isDense: true,
                           ),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          isDense: true,
                         ),
                       ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        onPressed: () {
+                          if (taskController.text.trim().isNotEmpty) {
+                            setSheetState(() {
+                              localTasks.add(taskController.text.trim());
+                              taskController.clear();
+                            });
+                          }
+                        },
+                        icon: Icon(Icons.add_circle, color: AppColors.primary, size: 32),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Note
+                  Row(
+                    children: [
+                      Icon(Icons.edit_note, size: 20, color: AppColors.accent),
+                      const SizedBox(width: 8),
+                      Text('Note', style: AppTextStyles.bodyBold),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: noteController,
+                    maxLines: 2,
+                    decoration: InputDecoration(
+                      hintText: 'Ex: Emmener les enfants au sport...',
+                      hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      contentPadding: const EdgeInsets.all(12),
                     ),
-                    const SizedBox(width: 8),
-                    IconButton(
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Save
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
                       onPressed: () {
-                        if (taskController.text.trim().isNotEmpty) {
-                          setSheetState(() {
-                            existingTasks.add(taskController.text.trim());
-                            taskController.clear();
-                          });
-                        }
+                        final cn = Map<String, String>.from(ref.read(dutyNotesProvider));
+                        final noteText = noteController.text.trim();
+                        if (noteText.isEmpty) { cn.remove(noteKey); } else { cn[noteKey] = noteText; }
+                        ref.read(dutyNotesProvider.notifier).state = cn;
+
+                        final ct = Map<String, List<String>>.from(ref.read(dutyTasksProvider));
+                        if (localTasks.isEmpty) { ct.remove(noteKey); } else { ct[noteKey] = localTasks; }
+                        ref.read(dutyTasksProvider.notifier).state = ct;
+
+                        final cc = Map<String, int>.from(ref.read(dutyColorsProvider));
+                        if (selectedColorIndex == null) { cc.remove(noteKey); } else { cc[noteKey] = selectedColorIndex!; }
+                        ref.read(dutyColorsProvider.notifier).state = cc;
+
+                        Navigator.pop(ctx);
                       },
-                      icon: Icon(Icons.add_circle, color: AppColors.primary, size: 32),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 16),
-
-                // Note
-                Row(
-                  children: [
-                    Icon(Icons.edit_note, size: 20, color: AppColors.accent),
-                    const SizedBox(width: 8),
-                    Text('Note', style: AppTextStyles.bodyBold),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                TextField(
-                  controller: noteController,
-                  maxLines: 2,
-                  decoration: InputDecoration(
-                    hintText: 'Ex: Emmener les enfants au sport...',
-                    hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    contentPadding: const EdgeInsets.all(12),
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                // Save
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      // Save note
-                      final currentNotes = Map<String, String>.from(ref.read(dutyNotesProvider));
-                      final noteText = noteController.text.trim();
-                      if (noteText.isEmpty) {
-                        currentNotes.remove(noteKey);
-                      } else {
-                        currentNotes[noteKey] = noteText;
-                      }
-                      ref.read(dutyNotesProvider.notifier).state = currentNotes;
-
-                      // Save tasks
-                      final currentTasks = Map<String, List<String>>.from(ref.read(dutyTasksProvider));
-                      if (existingTasks.isEmpty) {
-                        currentTasks.remove(noteKey);
-                      } else {
-                        currentTasks[noteKey] = existingTasks;
-                      }
-                      ref.read(dutyTasksProvider.notifier).state = currentTasks;
-
-                      Navigator.pop(ctx);
-                    },
-                    icon: const Icon(Icons.save),
-                    label: const Text('Enregistrer'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
+                      icon: const Icon(Icons.save),
+                      label: const Text('Enregistrer'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -429,14 +489,8 @@ class _RosterCalendar extends ConsumerWidget {
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: color,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  duty.type.label,
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
-                ),
+                decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(6)),
+                child: Text(duty.type.label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12)),
               ),
               if (duty.flightNumber != null) ...[
                 const SizedBox(width: 8),
@@ -450,17 +504,8 @@ class _RosterCalendar extends ConsumerWidget {
               children: [
                 Icon(Icons.flight_takeoff, size: 16, color: color),
                 const SizedBox(width: 6),
-                Text(
-                  '${RosterParser.airportName(duty.departure ?? '')} (${duty.departure})',
-                  style: AppTextStyles.body,
-                ),
-                if (duty.checkIn != null) ...[
-                  const Spacer(),
-                  Text(
-                    _formatTime(duty.checkIn!),
-                    style: AppTextStyles.bodyBold.copyWith(color: color),
-                  ),
-                ],
+                Text('${RosterParser.airportName(duty.departure ?? '')} (${duty.departure})', style: AppTextStyles.body),
+                if (duty.checkIn != null) ...[const Spacer(), Text(_fmtTime(duty.checkIn!), style: TextStyle(fontWeight: FontWeight.w700, color: color, fontSize: 13))],
               ],
             ),
             const SizedBox(height: 4),
@@ -468,17 +513,8 @@ class _RosterCalendar extends ConsumerWidget {
               children: [
                 Icon(Icons.flight_land, size: 16, color: AppColors.statusRepos),
                 const SizedBox(width: 6),
-                Text(
-                  '${RosterParser.airportName(duty.arrival ?? '')} (${duty.arrival})',
-                  style: AppTextStyles.body,
-                ),
-                if (duty.checkOut != null) ...[
-                  const Spacer(),
-                  Text(
-                    _formatTime(duty.checkOut!),
-                    style: AppTextStyles.bodyBold.copyWith(color: AppColors.statusRepos),
-                  ),
-                ],
+                Text('${RosterParser.airportName(duty.arrival ?? '')} (${duty.arrival})', style: AppTextStyles.body),
+                if (duty.checkOut != null) ...[const Spacer(), Text(_fmtTime(duty.checkOut!), style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.statusRepos, fontSize: 13))],
               ],
             ),
           ],
@@ -490,199 +526,184 @@ class _RosterCalendar extends ConsumerWidget {
   Widget _infoBox(IconData icon, String text, Color color) {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: color.withValues(alpha: 0.5)),
-          const SizedBox(width: 8),
-          Text(text, style: AppTextStyles.body),
-        ],
-      ),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12)),
+      child: Row(children: [Icon(icon, color: color.withValues(alpha: 0.5)), const SizedBox(width: 8), Text(text, style: AppTextStyles.body)]),
     );
   }
 
-  Color _dutyColor(List<RosterDuty> duties) {
+  Color _defaultDutyColor(List<RosterDuty> duties) {
     if (duties.isEmpty) return Colors.grey;
     return _dutyColorSingle(duties.first.type);
   }
 
   Color _dutyColorSingle(DutyType type) => switch (type) {
-    DutyType.flight => AppColors.statusEnVol,
-    DutyType.standby => AppColors.statusEscale,
-    DutyType.rest || DutyType.off => AppColors.statusRepos,
-    DutyType.training || DutyType.simulator => AppColors.statusRetour,
-    DutyType.deadhead => AppColors.accent,
+    DutyType.flight => const Color(0xFF2980B9),
+    DutyType.standby => const Color(0xFFF39C12),
+    DutyType.rest || DutyType.off => const Color(0xFF27AE60),
+    DutyType.training || DutyType.simulator => const Color(0xFF8E44AD),
+    DutyType.deadhead => const Color(0xFFF39C12),
   };
 
-  String _formatTime(DateTime dt) =>
-      '${dt.hour.toString().padLeft(2, '0')}h${dt.minute.toString().padLeft(2, '0')}';
+  String _fmtTime(DateTime dt) => '${dt.hour.toString().padLeft(2, '0')}h${dt.minute.toString().padLeft(2, '0')}';
 }
 
-// --- Day Block Widget ---
+// --- Horizontal Day Block ---
 
-class _DayBlock extends StatelessWidget {
+class _HorizontalDayBlock extends StatelessWidget {
   final DateTime date;
   final List<RosterDuty> duties;
   final String? note;
+  final List<String>? tasks;
+  final int? customColor;
   final VoidCallback onTap;
 
-  const _DayBlock({
+  const _HorizontalDayBlock({
     required this.date,
     required this.duties,
     required this.note,
+    required this.tasks,
+    required this.customColor,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final color = _blockColor();
+    final color = _resolveColor();
     final isToday = _isToday();
-    final dayName = _dayNamesFull[date.weekday - 1];
+    final dayName = _dayNamesFull[date.weekday - 1].substring(0, 3);
+    final flights = duties.where((d) => d.isFlight).toList();
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(14),
+        width: 110,
+        margin: const EdgeInsets.only(right: 8),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(16),
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: isToday ? color : color.withValues(alpha: 0.3),
-            width: isToday ? 2.5 : 1,
+            color: isToday ? color : color.withValues(alpha: 0.4),
+            width: isToday ? 3 : 1.5,
           ),
         ),
-        child: Row(
+        child: Column(
           children: [
-            // Date column
+            // Date header
             Container(
-              width: 50,
-              padding: const EdgeInsets.symmetric(vertical: 4),
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 6),
               decoration: BoxDecoration(
                 color: color.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
               ),
               child: Column(
                 children: [
                   Text(
                     '${date.day}',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      color: color,
-                    ),
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: color),
                   ),
                   Text(
-                    dayName.substring(0, 3),
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: color,
-                    ),
+                    dayName,
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 12),
 
-            // Info column
+            // Content
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Duty type badge
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: color,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          _blockLabel(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 11,
-                          ),
-                        ),
+              child: Padding(
+                padding: const EdgeInsets.all(5),
+                child: Column(
+                  children: [
+                    // Type badge
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      decoration: BoxDecoration(
+                        color: color,
+                        borderRadius: BorderRadius.circular(6),
                       ),
-                      if (_hasMultipleFlights()) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.grey[200],
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            '${duties.where((d) => d.isFlight).length} vols',
-                            style: TextStyle(fontSize: 10, color: Colors.grey[700]),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+                      child: Text(
+                        _label(),
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 10),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
 
-                  // Flight info
-                  if (_firstFlight() != null) ...[
-                    const SizedBox(height: 6),
-                    ...duties.where((d) => d.isFlight).map((flight) => Padding(
-                      padding: const EdgeInsets.only(bottom: 2),
-                      child: Row(
-                        children: [
-                          Text(
-                            flight.flightNumber ?? '',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13,
-                              color: color,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            '${RosterParser.airportName(flight.departure ?? '')} → ${RosterParser.airportName(flight.arrival ?? '')}',
-                            style: const TextStyle(fontSize: 13),
-                          ),
-                          const Spacer(),
-                          if (flight.checkIn != null)
+                    // Flight details for each flight
+                    if (flights.isNotEmpty) ...[
+                      ...flights.map((flight) => Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Column(
+                          children: [
+                            // Flight number
                             Text(
-                              _formatTime(flight.checkIn!),
-                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                              flight.flightNumber ?? '',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: color),
                             ),
+                            const SizedBox(height: 2),
+                            // Route: DEP → ARR
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  flight.departure ?? '',
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.grey[700]),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                                  child: Icon(Icons.arrow_forward, size: 10, color: color),
+                                ),
+                                Text(
+                                  flight.arrival ?? '',
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color),
+                                ),
+                              ],
+                            ),
+                            // Times
+                            if (flight.checkIn != null && flight.checkOut != null)
+                              Text(
+                                '${_fmtTime(flight.checkIn!)} - ${_fmtTime(flight.checkOut!)}',
+                                style: TextStyle(fontSize: 8, color: Colors.grey[500]),
+                              ),
+                          ],
+                        ),
+                      )),
+                    ] else if (duties.isNotEmpty && duties.first.type == DutyType.standby) ...[
+                      const SizedBox(height: 4),
+                      Icon(Icons.access_time, size: 20, color: color),
+                      const SizedBox(height: 2),
+                      Text('Astreinte', style: TextStyle(fontSize: 9, color: color)),
+                    ] else ...[
+                      const SizedBox(height: 4),
+                      Icon(
+                        duties.isEmpty ? Icons.event_busy : Icons.home,
+                        size: 20,
+                        color: color,
+                      ),
+                    ],
+
+                    const Spacer(),
+
+                    // Indicators for notes/tasks
+                    if (note != null || (tasks != null && tasks!.isNotEmpty))
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (note != null)
+                            Icon(Icons.sticky_note_2, size: 12, color: color.withValues(alpha: 0.6)),
+                          if (tasks != null && tasks!.isNotEmpty) ...[
+                            const SizedBox(width: 2),
+                            Icon(Icons.checklist, size: 12, color: color.withValues(alpha: 0.6)),
+                          ],
                         ],
                       ),
-                    )),
                   ],
-
-                  // Note preview
-                  if (note != null) ...[
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(Icons.sticky_note_2, size: 12, color: AppColors.accent),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            note!,
-                            style: TextStyle(fontSize: 12, color: AppColors.accent, fontStyle: FontStyle.italic),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ],
+                ),
               ),
             ),
-
-            // Arrow
-            Icon(Icons.chevron_right, color: color.withValues(alpha: 0.5)),
           ],
         ),
       ),
@@ -694,33 +715,26 @@ class _DayBlock extends StatelessWidget {
     return date.year == now.year && date.month == now.month && date.day == now.day;
   }
 
-  Color _blockColor() {
+  Color _resolveColor() {
+    if (customColor != null) {
+      return _availableColors.values.elementAt(customColor!);
+    }
     if (duties.isEmpty) return Colors.grey;
     return switch (duties.first.type) {
-      DutyType.flight => AppColors.statusEnVol,
-      DutyType.standby => AppColors.statusEscale,
-      DutyType.rest || DutyType.off => AppColors.statusRepos,
-      DutyType.training || DutyType.simulator => AppColors.statusRetour,
-      DutyType.deadhead => AppColors.accent,
+      DutyType.flight => const Color(0xFF2980B9),
+      DutyType.standby => const Color(0xFFF39C12),
+      DutyType.rest || DutyType.off => const Color(0xFF27AE60),
+      DutyType.training || DutyType.simulator => const Color(0xFF8E44AD),
+      DutyType.deadhead => const Color(0xFFF39C12),
     };
   }
 
-  String _blockLabel() {
+  String _label() {
     if (duties.isEmpty) return 'Libre';
     return duties.first.type.label;
   }
 
-  RosterDuty? _firstFlight() {
-    for (final d in duties) {
-      if (d.isFlight) return d;
-    }
-    return null;
-  }
-
-  bool _hasMultipleFlights() => duties.where((d) => d.isFlight).length > 1;
-
-  String _formatTime(DateTime dt) =>
-      '${dt.hour.toString().padLeft(2, '0')}h${dt.minute.toString().padLeft(2, '0')}';
+  String _fmtTime(DateTime dt) => '${dt.hour.toString().padLeft(2, '0')}h${dt.minute.toString().padLeft(2, '0')}';
 }
 
 class _MiniStat extends StatelessWidget {
