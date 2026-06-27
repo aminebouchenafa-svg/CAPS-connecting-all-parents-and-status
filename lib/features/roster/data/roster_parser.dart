@@ -317,21 +317,7 @@ class RosterParser {
       dataLines.add(line);
     }
 
-    // Step 5: Build list of "active" day indices — days that have airport
-    // data in the grid. This includes flights AND activities like ESIM
-    // (simulator abroad), DEPL (deployment), ARRT (late arrival).
-    const airportActivities = {'ESIM', 'DEPL', 'ARRT'};
-    final activeDayIndices = <int>[];
-    for (final entry in dayActivities.entries) {
-      final upper = entry.value;
-      if (_extractFlightNum(upper) != null ||
-          airportActivities.contains(upper)) {
-        activeDayIndices.add(entry.key);
-      }
-    }
-    activeDayIndices.sort();
-
-    // Step 6: Extract airport rows (lines with mostly 3-letter codes)
+    // Step 5: Extract airport rows (lines with mostly 3-letter codes)
     final airportRows = <List<String>>[];
     for (final dl in dataLines) {
       final tokens = dl.split(RegExp(r'\s+'));
@@ -350,46 +336,58 @@ class RosterParser {
       }
     }
 
-    // Map 1st-leg airport pairs to active days, then extract flight routes.
+    // Step 6: Map airport pairs to days. The airport rows may include
+    // entries for non-flight activities (ESIM, DEPL, ARRT). Dynamically
+    // find which combination of extra days matches the airport row count.
     final nFlights = flightDayIndices.length;
-    final nActive = activeDayIndices.length;
-    final allRoutes = <int, ({String dep, String arr})>{};
+    final flightRoutes = <int, ({String dep, String arr})>{};
 
     if (airportRows.length >= 2) {
       final depRow = airportRows[0];
       final arrRow = airportRows[1];
+      final depLen = depRow.length;
 
-      // Try matching to activeDayIndices first (includes ESIM etc.)
-      if (depRow.length == nActive && arrRow.length == nActive) {
-        for (int i = 0; i < nActive; i++) {
-          allRoutes[activeDayIndices[i]] = (
-            dep: depRow[i],
-            arr: arrRow[i],
-          );
+      // Find the right set of day indices that matches airport count
+      List<int> aptDayIndices = List.of(flightDayIndices);
+
+      if (depLen != nFlights) {
+        // Collect non-flight days that might have airport data
+        const aptActivities = ['ESIM', 'DEPL', 'ARRT'];
+        final extraDays = <int>[];
+        for (final entry in dayActivities.entries) {
+          if (!flightDayIndices.contains(entry.key) &&
+              aptActivities.contains(entry.value)) {
+            extraDays.add(entry.key);
+          }
         }
-      } else if (depRow.length == nFlights && arrRow.length == nFlights) {
-        for (int i = 0; i < nFlights; i++) {
-          allRoutes[flightDayIndices[i]] = (
-            dep: depRow[i],
-            arr: arrRow[i],
-          );
-        }
-      } else {
-        // Best-effort: use smaller count
-        final target = (depRow.length >= nActive) ? activeDayIndices : flightDayIndices;
-        final n = [depRow.length, arrRow.length, target.length]
-            .reduce((a, b) => a < b ? a : b);
-        for (int i = 0; i < n; i++) {
-          allRoutes[target[i]] = (dep: depRow[i], arr: arrRow[i]);
+        extraDays.sort();
+
+        // Try adding extra days one at a time until count matches
+        if (depLen > nFlights && extraDays.isNotEmpty) {
+          final candidates = List.of(flightDayIndices);
+          for (final extra in extraDays) {
+            candidates.add(extra);
+            candidates.sort();
+            if (candidates.length == depLen) break;
+          }
+          if (candidates.length == depLen) {
+            aptDayIndices = candidates;
+          }
         }
       }
-    }
 
-    // Extract only flight-day routes from allRoutes
-    final flightRoutes = <int, ({String dep, String arr})>{};
-    for (final fi in flightDayIndices) {
-      if (allRoutes.containsKey(fi)) {
-        flightRoutes[fi] = allRoutes[fi]!;
+      final n = [depLen, arrRow.length, aptDayIndices.length]
+          .reduce((a, b) => a < b ? a : b);
+      final allRoutes = <int, ({String dep, String arr})>{};
+      for (int i = 0; i < n; i++) {
+        allRoutes[aptDayIndices[i]] = (dep: depRow[i], arr: arrRow[i]);
+      }
+
+      // Extract only flight-day routes
+      for (final fi in flightDayIndices) {
+        if (allRoutes.containsKey(fi)) {
+          flightRoutes[fi] = allRoutes[fi]!;
+        }
       }
     }
 
@@ -411,29 +409,10 @@ class RosterParser {
       }
     }
 
-    // Map times similarly — active days may have times too (ESIM has sim times)
+    // Skip time mapping — time rows include ESIM/training times making
+    // counts unpredictable without column alignment. Focus on flight
+    // numbers and routes which are the critical data.
     final flightTimes = <int, ({String checkIn, String checkOut})>{};
-    if (timeRows.length >= 2) {
-      final t0 = timeRows[0];
-      final t1 = timeRows[1];
-      if (t0.length == nActive && t1.length == nActive) {
-        for (int i = 0; i < nActive; i++) {
-          if (flightDayIndices.contains(activeDayIndices[i])) {
-            flightTimes[activeDayIndices[i]] = (
-              checkIn: t0[i],
-              checkOut: t1[i],
-            );
-          }
-        }
-      } else if (t0.length == nFlights && t1.length == nFlights) {
-        for (int i = 0; i < nFlights; i++) {
-          flightTimes[flightDayIndices[i]] = (
-            checkIn: t0[i],
-            checkOut: t1[i],
-          );
-        }
-      }
-    }
 
     // Step 8: Extract 2nd-leg flight numbers
     final extraFlightRows = <List<String>>[];
@@ -545,7 +524,7 @@ class RosterParser {
     for (int r = 0; r < airportRows.length; r++) {
       debugSb.writeln('  Row $r (${airportRows[r].length}): ${airportRows[r].join(" ")}');
     }
-    debugSb.writeln('Active days: $nActive, Flight days: $nFlights');
+    debugSb.writeln('Flight days: $nFlights');
     debugSb.writeln('Routes mapped:');
     for (final fi in flightDayIndices) {
       final route = flightRoutes[fi];
