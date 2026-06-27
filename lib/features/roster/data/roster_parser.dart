@@ -257,7 +257,9 @@ class RosterParser {
       final cleaned = v.replaceAll('*', '').trim();
       final upper = cleaned.toUpperCase();
 
-      if (RegExp(r'^(Mon|Tue|Wed|Thu|Fri|Sat|Sun)$', caseSensitive: false)
+      if (RegExp(
+              r'^(Mon|Tue|Wed|Thu|Fri|Sat|Sun|Lun|Mar|Mer|Jeu|Ven|Sam|Dim)$',
+              caseSensitive: false)
           .hasMatch(cleaned)) continue;
       if (RegExp(r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)$',
               caseSensitive: false)

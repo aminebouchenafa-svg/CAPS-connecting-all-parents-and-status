@@ -36,11 +36,36 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
           endPageIndex: page,
         );
         for (final line in lines) {
-          if (line.text.trim().isNotEmpty) {
+          final lineText = line.text;
+          if (lineText.trim().isEmpty) continue;
+
+          final y = line.bounds.top + page * 10000;
+
+          // TextLines often span entire grid rows. Split into individual
+          // cells by detecting gaps of 2+ spaces in the text.
+          final segments = lineText.split(RegExp(r'\s{2,}'));
+          if (segments.length > 1) {
+            final charWidth =
+                lineText.isEmpty ? 1.0 : line.bounds.width / lineText.length;
+            int searchFrom = 0;
+            for (final seg in segments) {
+              final trimmed = seg.trim();
+              if (trimmed.isEmpty) continue;
+              final idx = lineText.indexOf(seg, searchFrom);
+              if (idx >= 0) {
+                allCells.add((
+                  x: line.bounds.left + idx * charWidth,
+                  y: y,
+                  text: trimmed,
+                ));
+                searchFrom = idx + seg.length;
+              }
+            }
+          } else {
             allCells.add((
               x: line.bounds.left,
-              y: line.bounds.top + page * 10000,
-              text: line.text.trim(),
+              y: y,
+              text: lineText.trim(),
             ));
           }
         }
@@ -59,24 +84,36 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
     document.dispose();
     if (allCells.isEmpty) return '';
 
-    // Group by Y position (4px tolerance)
+    // Group by Y position (8px tolerance for grid row alignment)
     final rows = <int, List<({double x, String text})>>{};
     for (final cell in allCells) {
-      final yKey = (cell.y / 4).round();
+      final yKey = (cell.y / 8).round();
       rows.putIfAbsent(yKey, () => []);
       rows[yKey]!.add((x: cell.x, text: cell.text));
     }
 
     final sortedKeys = rows.keys.toList()..sort();
 
-    // Find column positions from the row with the most cells (date row)
+    // Find column positions from the best grid row (prefer rows with day numbers)
     List<double>? colPositions;
+    int bestScore = 0;
     for (final key in sortedKeys) {
-      if (rows[key]!.length >= 20) {
-        final sorted = List.of(rows[key]!)
+      final rowCells = rows[key]!;
+      if (rowCells.length < 15) continue;
+      int dayCount = 0;
+      for (final cell in rowCells) {
+        final m = RegExp(r'^(\d{1,2})\b').firstMatch(cell.text.trim());
+        if (m != null) {
+          final d = int.tryParse(m.group(1)!);
+          if (d != null && d >= 1 && d <= 31) dayCount++;
+        }
+      }
+      final score = dayCount * 100 + rowCells.length;
+      if (score > bestScore) {
+        bestScore = score;
+        final sorted = List.of(rowCells)
           ..sort((a, b) => a.x.compareTo(b.x));
         colPositions = sorted.map((c) => c.x).toList();
-        break;
       }
     }
 
@@ -85,7 +122,6 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
       final cells = rows[key]!..sort((a, b) => a.x.compareTo(b.x));
 
       if (colPositions != null && cells.length >= 3) {
-        // Align to detected column positions (preserves empty cells)
         final aligned = List<String>.filled(colPositions.length, '');
         for (final cell in cells) {
           int bestCol = 0;
@@ -97,8 +133,12 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
               bestCol = i;
             }
           }
-          if (bestDist < 30) {
-            aligned[bestCol] = cell.text;
+          if (bestDist < 40) {
+            if (aligned[bestCol].isEmpty) {
+              aligned[bestCol] = cell.text;
+            } else {
+              aligned[bestCol] += ' ${cell.text}';
+            }
           }
         }
         sb.writeln(aligned.join('\t'));
@@ -158,7 +198,7 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
         Navigator.of(context).pop();
 
         final flightCount = roster.duties.where((d) => d.isFlight).length;
-        if (roster.duties.isEmpty) {
+        if (flightCount < 3) {
           _showRawTextDialog(context, text, roster);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
