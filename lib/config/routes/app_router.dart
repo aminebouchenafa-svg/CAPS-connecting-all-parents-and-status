@@ -127,9 +127,14 @@ class _MainShell extends ConsumerWidget {
     final isDark = ref.watch(isDarkModeProvider);
 
     return Scaffold(
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
-        child: child,
+      body: InteractiveViewer(
+        minScale: 1.0,
+        maxScale: 3.0,
+        panEnabled: false,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          child: child,
+        ),
       ),
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
