@@ -6,6 +6,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../data/roster_parser.dart';
 import '../../domain/entities/roster_duty.dart';
 import '../providers/roster_provider.dart';
+import 'roster_day_page.dart';
 
 const _dayNames = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 const _fullDayNames = [
@@ -294,7 +295,10 @@ class _WeekContent extends StatelessWidget {
           date: date,
           duties: duties,
           isToday: isToday,
-          onTap: () => _showDayDetail(context, date, duties),
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => RosterDayPage(date: date)),
+          ),
         );
       },
     );
