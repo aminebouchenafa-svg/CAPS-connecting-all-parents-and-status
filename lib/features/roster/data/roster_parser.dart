@@ -235,36 +235,42 @@ class RosterParser {
     if (activityRowIdx < 0) return [];
 
     // Step 3: Parse the activity row - map each token to a day index.
-    // Pre-process: merge split codes (PDF extraction can split "//"->"/ /"
-    // and "/RH"->"/ RH", each consuming an extra day index).
-    // Only merge when raw non-skip token count exceeds day count,
-    // otherwise each token maps 1:1 to a day.
+    // PDF extraction can split "//" → "/ /" and "/RH" → "/ RH".
+    // Try both merged and unmerged, pick the one matching day count best.
     final rawTokens = lines[activityRowIdx].trim().split(RegExp(r'\s+'));
 
-    int rawActivityCount = 0;
-    for (final t in rawTokens) {
-      if (_dayOfWeek.hasMatch(t) || _monthAbbr.containsKey(t)) continue;
-      rawActivityCount++;
-    }
-    final shouldMerge = rawActivityCount > dayDates.length;
-
-    final actTokens = <String>[];
-    for (int i = 0; i < rawTokens.length; i++) {
-      final t = rawTokens[i];
-      if (shouldMerge && t == '/' && i + 1 < rawTokens.length) {
-        final next = rawTokens[i + 1];
-        if (next == '/') {
-          actTokens.add('//');
-          i++;
-          continue;
-        }
-        if (next.toUpperCase() == 'RH') {
-          actTokens.add('/RH');
-          i++;
-          continue;
-        }
+    int _countNonSkip(List<String> tokens) {
+      int c = 0;
+      for (final t in tokens) {
+        if (_dayOfWeek.hasMatch(t) || _monthAbbr.containsKey(t)) continue;
+        c++;
       }
-      actTokens.add(t);
+      return c;
+    }
+
+    List<String> _buildMerged(List<String> raw) {
+      final result = <String>[];
+      for (int i = 0; i < raw.length; i++) {
+        final t = raw[i];
+        if (t == '/' && i + 1 < raw.length) {
+          final next = raw[i + 1];
+          if (next == '/') { result.add('//'); i++; continue; }
+          if (next.toUpperCase() == 'RH') { result.add('/RH'); i++; continue; }
+        }
+        result.add(t);
+      }
+      return result;
+    }
+
+    final mergedTokens = _buildMerged(rawTokens);
+    final mergedCount = _countNonSkip(mergedTokens);
+    final rawCount = _countNonSkip(rawTokens);
+
+    final List<String> actTokens;
+    if ((mergedCount - dayDates.length).abs() <= (rawCount - dayDates.length).abs()) {
+      actTokens = mergedTokens;
+    } else {
+      actTokens = rawTokens;
     }
 
     final dayActivities = <int, String>{};
@@ -687,6 +693,7 @@ class RosterParser {
     final times = <DateTime>[];
     bool hasActivity = false;
     DutyType actType = DutyType.off;
+    String? actCode;
     String? actNotes;
 
     for (final v in values) {
@@ -704,6 +711,7 @@ class RosterParser {
       if (_avioDevCodes.contains(upper)) {
         hasActivity = true;
         actType = _avioDevType(upper);
+        actCode = upper;
         actNotes = _avioDevLabel(upper);
         continue;
       }
@@ -731,7 +739,7 @@ class RosterParser {
       duties.add(RosterDuty(
         date: DateTime(year, month, day),
         type: actType,
-        activityCode: actNotes,
+        activityCode: actCode,
         notes: actNotes,
       ));
       return duties;
@@ -1103,19 +1111,45 @@ class RosterParser {
 
   Map<String, String> _parseCodeExplanations(String text) {
     final codes = <String, String>{};
-    final section = RegExp(r'CODE\s*EXPLANATIONS?(.*?)(?:TOTALS|OTHER\s+TRAINING|$)', dotAll: true)
-        .firstMatch(text);
+
+    // Try to find CODE EXPLANATIONS section
+    final section = RegExp(
+      r'CODE\s*EXPLANATION[S]?(.*?)(?:TOTALS|OTHER\s+TRAINING|Page\s+\d|$)',
+      dotAll: true,
+      caseSensitive: false,
+    ).firstMatch(text);
     if (section == null) return codes;
     final block = section.group(1)!;
-    final lines = RegExp(r'(\S+)\s*\|\s*(.+?)(?=\n|\s{2,}\S+\s*\||$)')
+
+    // Try pipe-separated format: CODE | DESCRIPTION
+    final pipeMatches = RegExp(r'(\S+)\s*\|\s*(.+?)(?=\n|\s{2,}\S+\s*\||$)')
         .allMatches(block);
-    for (final m in lines) {
+    for (final m in pipeMatches) {
       final code = m.group(1)!.trim();
       final desc = m.group(2)!.trim();
-      if (code != 'CODE' && desc != 'DESCRIPTION') {
+      if (code.toUpperCase() != 'CODE' && desc.toUpperCase() != 'DESCRIPTION') {
         codes[code] = desc;
       }
     }
+
+    // If pipe format found nothing, try space-separated: CODE Description text
+    if (codes.isEmpty) {
+      final spaceLines = block.split('\n');
+      for (final line in spaceLines) {
+        final trimmed = line.trim();
+        if (trimmed.isEmpty) continue;
+        // Match known codes at start of line followed by description
+        final m = RegExp(r'^(//?(?:RH)?|[A-Z][A-Z0-9/]{1,8})\s+(.+)$').firstMatch(trimmed);
+        if (m != null) {
+          final code = m.group(1)!.trim();
+          final desc = m.group(2)!.trim();
+          if (code.toUpperCase() != 'CODE' && desc.toUpperCase() != 'DESCRIPTION' && desc.length > 1) {
+            codes[code] = desc;
+          }
+        }
+      }
+    }
+
     return codes;
   }
 
