@@ -60,6 +60,16 @@
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
+
+    /* Force pinch-to-zoom: Flutter sets touch-action:none on its elements */
+    flt-glass-pane,
+    flt-scene-host,
+    flt-semantics-placeholder,
+    flutter-view,
+    body > div,
+    body > div > div {
+      touch-action: pan-x pan-y pinch-zoom !important;
+    }
   </style>
 </head>
 <body>
