@@ -259,6 +259,7 @@ class _EventsList extends ConsumerWidget {
             onDismissed: (_) {
               ref.read(calendarEventsNotifierProvider.notifier).removeEvent(event.id);
             },
+            child: card,
           );
         }
 
