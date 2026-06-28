@@ -214,6 +214,7 @@ class RosterPage extends ConsumerWidget {
 
   void _exportICal(BuildContext context, Roster roster) {
     final ical = ICalExport.generateICalString(roster);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -221,7 +222,7 @@ class RosterPage extends ConsumerWidget {
           children: [
             Icon(Icons.calendar_today, color: AppColors.neonCyan),
             const SizedBox(width: 8),
-            Text('Export iCal', style: TextStyle(color: AppColors.neonCyan)),
+            Text('Export iCal', style: TextStyle(color: isDark ? AppColors.neonCyan : const Color(0xFF00838F))),
           ],
         ),
         content: Column(
@@ -232,7 +233,7 @@ class RosterPage extends ConsumerWidget {
             Container(
               height: 150,
               decoration: BoxDecoration(
-                color: AppColors.backgroundDark,
+                color: isDark ? AppColors.backgroundDark : Colors.grey.shade100,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: AppColors.neonCyan.withValues(alpha: 0.2)),
               ),
@@ -249,7 +250,7 @@ class RosterPage extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Fermer', style: TextStyle(color: AppColors.neonCyan)),
+            child: Text('Fermer', style: TextStyle(color: isDark ? AppColors.neonCyan : const Color(0xFF00838F))),
           ),
         ],
       ),
@@ -258,6 +259,7 @@ class RosterPage extends ConsumerWidget {
 
   void _shareRoster(BuildContext context, Roster roster) {
     final text = RosterShare.generateTextSummary(roster);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -265,7 +267,7 @@ class RosterPage extends ConsumerWidget {
           children: [
             Icon(Icons.share, color: AppColors.neonMagenta),
             const SizedBox(width: 8),
-            Text('Partager', style: TextStyle(color: AppColors.neonMagenta)),
+            Text('Partager', style: TextStyle(color: isDark ? AppColors.neonMagenta : const Color(0xFFC2185B))),
           ],
         ),
         content: Column(
@@ -276,7 +278,7 @@ class RosterPage extends ConsumerWidget {
             Container(
               height: 200,
               decoration: BoxDecoration(
-                color: AppColors.backgroundDark,
+                color: isDark ? AppColors.backgroundDark : Colors.grey.shade100,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: AppColors.neonMagenta.withValues(alpha: 0.2)),
               ),
@@ -290,7 +292,7 @@ class RosterPage extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: Text('Fermer', style: TextStyle(color: AppColors.neonCyan)),
+            child: Text('Fermer', style: TextStyle(color: isDark ? AppColors.neonCyan : const Color(0xFF00838F))),
           ),
         ],
       ),
@@ -477,174 +479,182 @@ class _RosterCalendar extends ConsumerWidget {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.75,
-        minChildSize: 0.4,
-        maxChildSize: 0.95,
-        expand: false,
-        builder: (ctx, scrollController) => Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-          child: ListView(
-            controller: scrollController,
-            children: [
-              Center(
-                child: Container(
-                  width: 40, height: 4,
-                  decoration: BoxDecoration(
-                    color: AppColors.neonCyan.withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(2),
+      builder: (ctx) {
+        final tDark = Theme.of(ctx).brightness == Brightness.dark;
+        final tOnSurface = Theme.of(ctx).colorScheme.onSurface;
+        final tCardBg = tDark ? AppColors.cardDark : Colors.white;
+        return DraggableScrollableSheet(
+          initialChildSize: 0.75,
+          minChildSize: 0.4,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (ctx, scrollController) => Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+            child: ListView(
+              controller: scrollController,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(
+                      color: tOnSurface.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-              Row(
-                children: [
-                  Icon(Icons.bar_chart, size: 22, color: AppColors.neonCyan),
-                  const SizedBox(width: 8),
-                  Text(
-                    'TOTAUX',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.neonCyan,
-                      shadows: [Shadow(color: AppColors.neonCyan.withValues(alpha: 0.5), blurRadius: 6)],
+                Row(
+                  children: [
+                    Icon(Icons.bar_chart, size: 22, color: AppColors.neonCyan),
+                    const SizedBox(width: 8),
+                    Text(
+                      'TOTAUX',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: tDark ? AppColors.neonCyan : const Color(0xFF00838F),
+                        shadows: tDark ? [Shadow(color: AppColors.neonCyan.withValues(alpha: 0.5), blurRadius: 6)] : [],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
+                  ],
+                ),
+                const SizedBox(height: 12),
 
-              if (roster.allStats.isNotEmpty)
-                Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.cardDark,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.neonCyan.withValues(alpha: 0.15)),
-                    boxShadow: [BoxShadow(color: AppColors.neonCyan.withValues(alpha: 0.05), blurRadius: 12)],
-                  ),
-                  child: Column(
-                    children: roster.allStats.entries.toList().asMap().entries.map((entry) {
-                      final idx = entry.key;
-                      final stat = entry.value;
-                      final isHours = stat.value.contains(':');
-                      return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        decoration: BoxDecoration(
-                          border: idx > 0
-                              ? Border(top: BorderSide(color: AppColors.neonCyan.withValues(alpha: 0.08)))
-                              : null,
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(stat.key, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white70)),
-                            ),
-                            Text(
-                              stat.value,
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w800,
-                                color: isHours ? AppColors.neonCyan : AppColors.neonOrange,
-                                shadows: [
-                                  Shadow(
-                                    color: (isHours ? AppColors.neonCyan : AppColors.neonOrange).withValues(alpha: 0.5),
-                                    blurRadius: 4,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                )
-              else
-                Text('Aucun total disponible', style: TextStyle(color: Colors.white38)),
-
-              const SizedBox(height: 24),
-
-              Row(
-                children: [
-                  Icon(Icons.info_outline, size: 22, color: AppColors.neonMagenta),
-                  const SizedBox(width: 8),
-                  Text(
-                    'CODES',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.neonMagenta,
-                      shadows: [Shadow(color: AppColors.neonMagenta.withValues(alpha: 0.5), blurRadius: 6)],
+                if (roster.allStats.isNotEmpty)
+                  Container(
+                    decoration: BoxDecoration(
+                      color: tCardBg,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.neonCyan.withValues(alpha: 0.15)),
+                      boxShadow: tDark
+                          ? [BoxShadow(color: AppColors.neonCyan.withValues(alpha: 0.05), blurRadius: 12)]
+                          : [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8)],
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              if (roster.codeExplanations.isNotEmpty)
-                Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.cardDark,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.neonMagenta.withValues(alpha: 0.15)),
-                    boxShadow: [BoxShadow(color: AppColors.neonMagenta.withValues(alpha: 0.05), blurRadius: 12)],
-                  ),
-                  child: Column(
-                    children: roster.codeExplanations.entries.toList().asMap().entries.map((entry) {
-                      final idx = entry.key;
-                      final code = entry.value;
-                      final codeColor = _colorForCode(code.key);
-                      return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        decoration: BoxDecoration(
-                          border: idx > 0
-                              ? Border(top: BorderSide(color: AppColors.neonMagenta.withValues(alpha: 0.08)))
-                              : null,
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 60,
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: codeColor.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: codeColor.withValues(alpha: 0.4)),
-                                boxShadow: [BoxShadow(color: codeColor.withValues(alpha: 0.2), blurRadius: 4)],
+                    child: Column(
+                      children: roster.allStats.entries.toList().asMap().entries.map((entry) {
+                        final idx = entry.key;
+                        final stat = entry.value;
+                        final isHours = stat.value.contains(':');
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            border: idx > 0
+                                ? Border(top: BorderSide(color: AppColors.neonCyan.withValues(alpha: 0.08)))
+                                : null,
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(stat.key, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: tOnSurface.withValues(alpha: 0.7))),
                               ),
-                              child: Text(
-                                code.key,
+                              Text(
+                                stat.value,
                                 style: TextStyle(
-                                  fontSize: 13,
+                                  fontSize: 15,
                                   fontWeight: FontWeight.w800,
-                                  color: codeColor,
-                                  shadows: [Shadow(color: codeColor.withValues(alpha: 0.5), blurRadius: 4)],
+                                  color: isHours
+                                      ? (tDark ? AppColors.neonCyan : const Color(0xFF00838F))
+                                      : (tDark ? AppColors.neonOrange : const Color(0xFFE65100)),
+                                  shadows: tDark
+                                      ? [Shadow(color: (isHours ? AppColors.neonCyan : AppColors.neonOrange).withValues(alpha: 0.5), blurRadius: 4)]
+                                      : [],
                                 ),
-                                textAlign: TextAlign.center,
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                code.value,
-                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: Colors.white70),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                )
-              else
-                Text('Aucun code disponible', style: TextStyle(color: Colors.white38)),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  )
+                else
+                  Text('Aucun total disponible', style: TextStyle(color: tOnSurface.withValues(alpha: 0.4))),
 
-              const SizedBox(height: 20),
-            ],
+                const SizedBox(height: 24),
+
+                Row(
+                  children: [
+                    Icon(Icons.info_outline, size: 22, color: AppColors.neonMagenta),
+                    const SizedBox(width: 8),
+                    Text(
+                      'CODES',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: tDark ? AppColors.neonMagenta : const Color(0xFFC2185B),
+                        shadows: tDark ? [Shadow(color: AppColors.neonMagenta.withValues(alpha: 0.5), blurRadius: 6)] : [],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                if (roster.codeExplanations.isNotEmpty)
+                  Container(
+                    decoration: BoxDecoration(
+                      color: tCardBg,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.neonMagenta.withValues(alpha: 0.15)),
+                      boxShadow: tDark
+                          ? [BoxShadow(color: AppColors.neonMagenta.withValues(alpha: 0.05), blurRadius: 12)]
+                          : [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8)],
+                    ),
+                    child: Column(
+                      children: roster.codeExplanations.entries.toList().asMap().entries.map((entry) {
+                        final idx = entry.key;
+                        final code = entry.value;
+                        final codeColor = _colorForCode(code.key);
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            border: idx > 0
+                                ? Border(top: BorderSide(color: AppColors.neonMagenta.withValues(alpha: 0.08)))
+                                : null,
+                          ),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 60,
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: codeColor.withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: codeColor.withValues(alpha: 0.4)),
+                                  boxShadow: tDark ? [BoxShadow(color: codeColor.withValues(alpha: 0.2), blurRadius: 4)] : [],
+                                ),
+                                child: Text(
+                                  code.key,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w800,
+                                    color: codeColor,
+                                    shadows: tDark ? [Shadow(color: codeColor.withValues(alpha: 0.5), blurRadius: 4)] : [],
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  code.value,
+                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: tOnSurface.withValues(alpha: 0.7)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  )
+                else
+                  Text('Aucun code disponible', style: TextStyle(color: tOnSurface.withValues(alpha: 0.4))),
+
+                const SizedBox(height: 20),
+              ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -681,6 +691,8 @@ class _RosterCalendar extends ConsumerWidget {
       ),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheetState) {
+          final sheetDark = Theme.of(ctx).brightness == Brightness.dark;
+          final sheetOnSurface = Theme.of(ctx).colorScheme.onSurface;
           final currentColor = selectedColorIndex != null
               ? _availableColors.values.elementAt(selectedColorIndex!)
               : _defaultDutyColor(duties);
@@ -699,7 +711,7 @@ class _RosterCalendar extends ConsumerWidget {
                     child: Container(
                       width: 40, height: 4,
                       decoration: BoxDecoration(
-                        color: AppColors.neonCyan.withValues(alpha: 0.3),
+                        color: sheetOnSurface.withValues(alpha: 0.2),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -714,7 +726,7 @@ class _RosterCalendar extends ConsumerWidget {
                           color: currentColor.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: currentColor),
-                          boxShadow: [BoxShadow(color: currentColor.withValues(alpha: 0.3), blurRadius: 8)],
+                          boxShadow: sheetDark ? [BoxShadow(color: currentColor.withValues(alpha: 0.3), blurRadius: 8)] : [],
                         ),
                         child: Text(
                           '${date.day}',
@@ -722,7 +734,7 @@ class _RosterCalendar extends ConsumerWidget {
                             fontSize: 24,
                             fontWeight: FontWeight.w900,
                             color: currentColor,
-                            shadows: [Shadow(color: currentColor.withValues(alpha: 0.6), blurRadius: 6)],
+                            shadows: sheetDark ? [Shadow(color: currentColor.withValues(alpha: 0.6), blurRadius: 6)] : [],
                           ),
                         ),
                       ),
@@ -730,8 +742,8 @@ class _RosterCalendar extends ConsumerWidget {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(dayName, style: AppTextStyles.heading3.copyWith(color: Colors.white)),
-                          Text('${_monthNames[date.month]} ${date.year}', style: AppTextStyles.caption.copyWith(color: Colors.white54)),
+                          Text(dayName, style: AppTextStyles.heading3.copyWith(color: sheetOnSurface)),
+                          Text('${_monthNames[date.month]} ${date.year}', style: AppTextStyles.caption.copyWith(color: sheetOnSurface.withValues(alpha: 0.5))),
                         ],
                       ),
                       const Spacer(),
@@ -773,11 +785,11 @@ class _RosterCalendar extends ConsumerWidget {
                   const SizedBox(height: 16),
 
                   if (duties.isEmpty)
-                    _infoBox(Icons.event_busy, 'Pas d\'activité programmée', Colors.white38)
+                    _infoBox(ctx, Icons.event_busy, 'Pas d\'activité programmée', sheetOnSurface.withValues(alpha: 0.4))
                   else
                     ...duties.map((duty) => Padding(
                       padding: const EdgeInsets.only(bottom: 8),
-                      child: _dutyDetailCard(duty),
+                      child: _dutyDetailCard(ctx, duty),
                     )),
 
                   const SizedBox(height: 16),
@@ -786,7 +798,7 @@ class _RosterCalendar extends ConsumerWidget {
                     children: [
                       Icon(Icons.palette, size: 20, color: AppColors.neonCyan),
                       const SizedBox(width: 8),
-                      Text('Couleur du bloc', style: AppTextStyles.bodyBold.copyWith(color: Colors.white)),
+                      Text('Couleur du bloc', style: AppTextStyles.bodyBold.copyWith(color: sheetOnSurface)),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -824,7 +836,7 @@ class _RosterCalendar extends ConsumerWidget {
                             const SizedBox(height: 2),
                             Text(
                               label.split(' ').first,
-                              style: TextStyle(fontSize: 9, color: Colors.white54),
+                              style: TextStyle(fontSize: 9, color: sheetOnSurface.withValues(alpha: 0.5)),
                             ),
                           ],
                         ),
@@ -840,7 +852,7 @@ class _RosterCalendar extends ConsumerWidget {
                     children: [
                       Icon(Icons.notifications_active, size: 20, color: AppColors.neonOrange),
                       const SizedBox(width: 8),
-                      Text('Rappels', style: AppTextStyles.bodyBold.copyWith(color: Colors.white)),
+                      Text('Rappels', style: AppTextStyles.bodyBold.copyWith(color: sheetOnSurface)),
                       const Spacer(),
                       if (localTasks.isNotEmpty)
                         Container(
@@ -881,7 +893,7 @@ class _RosterCalendar extends ConsumerWidget {
                                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
                                 visualDensity: VisualDensity.compact,
                                 leading: Icon(Icons.circle, size: 12, color: c),
-                                title: Text(text, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.white)),
+                                title: Text(text, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: sheetOnSurface)),
                                 trailing: GestureDetector(
                                   onTap: () => setSheetState(() => localTasks.removeAt(idx)),
                                   child: Container(
@@ -901,7 +913,7 @@ class _RosterCalendar extends ConsumerWidget {
                     ),
 
                   const SizedBox(height: 6),
-                  Text('Ajouter rapidement', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white54)),
+                  Text('Ajouter rapidement', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: sheetOnSurface.withValues(alpha: 0.5))),
                   const SizedBox(height: 8),
                   ConstrainedBox(
                     constraints: const BoxConstraints(maxHeight: 180),
@@ -947,21 +959,21 @@ class _RosterCalendar extends ConsumerWidget {
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                               decoration: BoxDecoration(
-                                color: alreadyAdded ? Colors.white10 : c.withValues(alpha: 0.1),
+                                color: alreadyAdded ? sheetOnSurface.withValues(alpha: 0.05) : c.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: alreadyAdded ? Colors.white24 : c.withValues(alpha: 0.4)),
+                                border: Border.all(color: alreadyAdded ? sheetOnSurface.withValues(alpha: 0.15) : c.withValues(alpha: 0.4)),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(alreadyAdded ? Icons.check : icon, size: 14, color: alreadyAdded ? Colors.white38 : c),
+                                  Icon(alreadyAdded ? Icons.check : icon, size: 14, color: alreadyAdded ? sheetOnSurface.withValues(alpha: 0.3) : c),
                                   const SizedBox(width: 5),
                                   Text(
                                     label,
                                     style: TextStyle(
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
-                                      color: alreadyAdded ? Colors.white38 : c,
+                                      color: alreadyAdded ? sheetOnSurface.withValues(alpha: 0.3) : c,
                                       decoration: alreadyAdded ? TextDecoration.lineThrough : null,
                                     ),
                                   ),
@@ -975,7 +987,7 @@ class _RosterCalendar extends ConsumerWidget {
                   ),
 
                   const SizedBox(height: 12),
-                  Text('Ou ajouter un rappel personnalisé', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.white54)),
+                  Text('Ou ajouter un rappel personnalisé', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: sheetOnSurface.withValues(alpha: 0.5))),
                   const SizedBox(height: 8),
                   Row(
                     children: [
@@ -1010,10 +1022,10 @@ class _RosterCalendar extends ConsumerWidget {
                       Expanded(
                         child: TextField(
                           controller: taskController,
-                          style: const TextStyle(color: Colors.white),
+                          style: TextStyle(color: sheetOnSurface),
                           decoration: InputDecoration(
                             hintText: 'Mon rappel...',
-                            hintStyle: TextStyle(color: Colors.white30, fontSize: 14),
+                            hintStyle: TextStyle(color: sheetOnSurface.withValues(alpha: 0.3), fontSize: 14),
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                             isDense: true,
@@ -1053,19 +1065,19 @@ class _RosterCalendar extends ConsumerWidget {
                     children: [
                       Icon(Icons.edit_note, size: 20, color: AppColors.neonYellow),
                       const SizedBox(width: 8),
-                      Text('Note', style: AppTextStyles.bodyBold.copyWith(color: Colors.white)),
+                      Text('Note', style: AppTextStyles.bodyBold.copyWith(color: sheetOnSurface)),
                       const SizedBox(width: 6),
-                      Text('(mémo perso)', style: TextStyle(fontSize: 11, color: Colors.white38)),
+                      Text('(mémo perso)', style: TextStyle(fontSize: 11, color: sheetOnSurface.withValues(alpha: 0.4))),
                     ],
                   ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: noteController,
                     maxLines: 2,
-                    style: const TextStyle(color: Colors.white),
+                    style: TextStyle(color: sheetOnSurface),
                     decoration: InputDecoration(
                       hintText: 'Ex: Sortie dîner, anniversaire...',
-                      hintStyle: TextStyle(color: Colors.white30, fontSize: 14),
+                      hintStyle: TextStyle(color: sheetOnSurface.withValues(alpha: 0.3), fontSize: 14),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                       contentPadding: const EdgeInsets.all(12),
                     ),
@@ -1104,7 +1116,9 @@ class _RosterCalendar extends ConsumerWidget {
     );
   }
 
-  Widget _dutyDetailCard(RosterDuty duty) {
+  Widget _dutyDetailCard(BuildContext ctx, RosterDuty duty) {
+    final isDark = Theme.of(ctx).brightness == Brightness.dark;
+    final onSurface = Theme.of(ctx).colorScheme.onSurface;
     final color = _colorForDuty(duty);
     return Container(
       padding: const EdgeInsets.all(12),
@@ -1112,7 +1126,9 @@ class _RosterCalendar extends ConsumerWidget {
         color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color.withValues(alpha: 0.3)),
-        boxShadow: [BoxShadow(color: color.withValues(alpha: 0.1), blurRadius: 8)],
+        boxShadow: isDark
+            ? [BoxShadow(color: color.withValues(alpha: 0.1), blurRadius: 8)]
+            : [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 6)],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1125,7 +1141,7 @@ class _RosterCalendar extends ConsumerWidget {
                   color: color.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(color: color.withValues(alpha: 0.5)),
-                  boxShadow: [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 4)],
+                  boxShadow: isDark ? [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 4)] : [],
                 ),
                 child: Text(
                   duty.isFlight ? 'Vol' : (duty.activityCode ?? duty.type.label),
@@ -1133,13 +1149,13 @@ class _RosterCalendar extends ConsumerWidget {
                     color: color,
                     fontWeight: FontWeight.w700,
                     fontSize: 12,
-                    shadows: [Shadow(color: color.withValues(alpha: 0.5), blurRadius: 4)],
+                    shadows: isDark ? [Shadow(color: color.withValues(alpha: 0.5), blurRadius: 4)] : [],
                   ),
                 ),
               ),
               if (duty.flightNumber != null) ...[
                 const SizedBox(width: 8),
-                Text(duty.flightNumber!, style: AppTextStyles.bodyBold.copyWith(color: Colors.white)),
+                Text(duty.flightNumber!, style: AppTextStyles.bodyBold.copyWith(color: onSurface)),
               ],
             ],
           ),
@@ -1149,12 +1165,12 @@ class _RosterCalendar extends ConsumerWidget {
               children: [
                 Icon(Icons.flight_takeoff, size: 16, color: color),
                 const SizedBox(width: 6),
-                Text('${RosterParser.airportName(duty.departure ?? '')} (${duty.departure})', style: AppTextStyles.body.copyWith(color: Colors.white)),
+                Text('${RosterParser.airportName(duty.departure ?? '')} (${duty.departure})', style: AppTextStyles.body.copyWith(color: onSurface)),
                 if (duty.checkIn != null) ...[
                   const Spacer(),
                   Text(
                     _fmtTime(duty.checkIn!),
-                    style: TextStyle(fontWeight: FontWeight.w700, color: color, fontSize: 13, shadows: [Shadow(color: color.withValues(alpha: 0.5), blurRadius: 4)]),
+                    style: TextStyle(fontWeight: FontWeight.w700, color: isDark ? color : color.withValues(alpha: 0.85), fontSize: 13, shadows: isDark ? [Shadow(color: color.withValues(alpha: 0.5), blurRadius: 4)] : []),
                   ),
                 ],
               ],
@@ -1162,14 +1178,14 @@ class _RosterCalendar extends ConsumerWidget {
             const SizedBox(height: 4),
             Row(
               children: [
-                Icon(Icons.flight_land, size: 16, color: AppColors.neonGreen),
+                Icon(Icons.flight_land, size: 16, color: isDark ? AppColors.neonGreen : const Color(0xFF2E7D32)),
                 const SizedBox(width: 6),
-                Text('${RosterParser.airportName(duty.arrival ?? '')} (${duty.arrival})', style: AppTextStyles.body.copyWith(color: Colors.white)),
+                Text('${RosterParser.airportName(duty.arrival ?? '')} (${duty.arrival})', style: AppTextStyles.body.copyWith(color: onSurface)),
                 if (duty.checkOut != null) ...[
                   const Spacer(),
                   Text(
                     _fmtTime(duty.checkOut!),
-                    style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.neonGreen, fontSize: 13, shadows: [Shadow(color: AppColors.neonGreen.withValues(alpha: 0.5), blurRadius: 4)]),
+                    style: TextStyle(fontWeight: FontWeight.w700, color: isDark ? AppColors.neonGreen : const Color(0xFF2E7D32), fontSize: 13, shadows: isDark ? [Shadow(color: AppColors.neonGreen.withValues(alpha: 0.5), blurRadius: 4)] : []),
                   ),
                 ],
               ],
@@ -1187,7 +1203,7 @@ class _RosterCalendar extends ConsumerWidget {
             ),
             if (duty.notes != null) ...[
               const SizedBox(height: 4),
-              Text(duty.notes!, style: AppTextStyles.body.copyWith(color: Colors.white70)),
+              Text(duty.notes!, style: AppTextStyles.body.copyWith(color: onSurface.withValues(alpha: 0.7))),
             ],
           ],
         ],
@@ -1195,7 +1211,8 @@ class _RosterCalendar extends ConsumerWidget {
     );
   }
 
-  Widget _infoBox(IconData icon, String text, Color color) {
+  Widget _infoBox(BuildContext ctx, IconData icon, String text, Color color) {
+    final onSurface = Theme.of(ctx).colorScheme.onSurface;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -1203,7 +1220,7 @@ class _RosterCalendar extends ConsumerWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
-      child: Row(children: [Icon(icon, color: color), const SizedBox(width: 8), Text(text, style: AppTextStyles.body.copyWith(color: Colors.white70))]),
+      child: Row(children: [Icon(icon, color: color), const SizedBox(width: 8), Text(text, style: AppTextStyles.body.copyWith(color: onSurface.withValues(alpha: 0.7)))]),
     );
   }
 
