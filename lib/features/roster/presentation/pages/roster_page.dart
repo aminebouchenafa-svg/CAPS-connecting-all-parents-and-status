@@ -253,8 +253,6 @@ class _RosterCalendar extends ConsumerWidget {
   }
 
   void _showTotalsAndCodes(BuildContext context, WidgetRef ref) {
-    final debugInfo = ref.read(rosterDebugProvider);
-    final rawText = ref.read(rosterRawTextProvider);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -350,10 +348,11 @@ class _RosterCalendar extends ConsumerWidget {
                     children: roster.codeExplanations.entries.toList().asMap().entries.map((entry) {
                       final idx = entry.key;
                       final code = entry.value;
+                      final codeColor = _colorForCode(code.key);
                       return Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                         decoration: BoxDecoration(
-                          color: idx.isEven ? Colors.grey.withValues(alpha: 0.04) : Colors.transparent,
+                          color: codeColor.withValues(alpha: 0.04),
                           border: idx > 0 ? Border(top: BorderSide(color: Colors.grey.withValues(alpha: 0.15))) : null,
                         ),
                         child: Row(
@@ -362,12 +361,12 @@ class _RosterCalendar extends ConsumerWidget {
                               width: 60,
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                               decoration: BoxDecoration(
-                                color: AppColors.accent.withValues(alpha: 0.1),
+                                color: codeColor.withValues(alpha: 0.15),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
                                 code.key,
-                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.accent),
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: codeColor),
                                 textAlign: TextAlign.center,
                               ),
                             ),
@@ -383,52 +382,6 @@ class _RosterCalendar extends ConsumerWidget {
                 )
               else
                 Text('Aucun code disponible', style: TextStyle(color: Colors.grey[400])),
-
-              // Debug parser info
-              if (debugInfo != null) ...[
-                const SizedBox(height: 24),
-                Row(
-                  children: [
-                    Icon(Icons.bug_report, size: 22, color: Colors.grey[600]),
-                    const SizedBox(width: 8),
-                    Text('DEBUG PARSER', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.grey[600])),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: SelectableText(
-                    debugInfo,
-                    style: const TextStyle(fontSize: 9, fontFamily: 'monospace', color: Colors.black87),
-                  ),
-                ),
-              ],
-              if (rawText != null) ...[
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Icon(Icons.text_snippet, size: 22, color: Colors.grey[600]),
-                    const SizedBox(width: 8),
-                    Text('TEXTE PDF BRUT', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.grey[600])),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: SelectableText(
-                    rawText,
-                    style: const TextStyle(fontSize: 8, fontFamily: 'monospace', color: Colors.black87),
-                  ),
-                ),
-              ],
 
               const SizedBox(height: 20),
             ],
@@ -954,6 +907,17 @@ class _RosterCalendar extends ConsumerWidget {
   Color _defaultDutyColor(List<RosterDuty> duties) {
     if (duties.isEmpty) return Colors.grey;
     return _colorForDuty(duties.first);
+  }
+
+  static Color _colorForCode(String code) {
+    final upper = code.toUpperCase();
+    if (['/RH', '//', 'RH'].contains(upper)) return const Color(0xFF27AE60);
+    if (['/', 'OFF', 'DO', 'JA'].contains(upper)) return const Color(0xFFE74C3C);
+    if (['ING1', 'ING2', 'ING3', 'ING4', 'ING5', 'ESIM', 'INST'].contains(upper)) return const Color(0xFF8E44AD);
+    if (['HS', 'SBY', 'STBY', 'STANDBY'].contains(upper)) return const Color(0xFFF39C12);
+    if (['ARRT', 'DEPL'].contains(upper)) return const Color(0xFFF39C12);
+    if (['ABS', 'C/O', 'REPOS', 'REST'].contains(upper)) return const Color(0xFF27AE60);
+    return const Color(0xFF95A5A6);
   }
 
   static Color _colorForDuty(RosterDuty duty) {
