@@ -10,7 +10,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="C.A.P.S.">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <!-- PWA icons -->
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
@@ -23,8 +23,9 @@
     body {
       margin: 0;
       padding: 0;
-      background-color: #1A5276;
+      background-color: #0A0E1A;
       font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      overflow: hidden;
     }
 
     .loading {
@@ -67,78 +68,6 @@
     <p>Cockpit Familial</p>
     <div class="spinner"></div>
   </div>
-
-  <script>
-    // Pinch-to-zoom for Flutter web (CanvasKit blocks native zoom)
-    (function() {
-      var scale = 1;
-      var lastDist = 0;
-      var zooming = false;
-
-      function dist(t) {
-        var dx = t[0].clientX - t[1].clientX;
-        var dy = t[0].clientY - t[1].clientY;
-        return Math.sqrt(dx * dx + dy * dy);
-      }
-
-      document.addEventListener('touchstart', function(e) {
-        if (e.touches.length === 2) {
-          zooming = true;
-          lastDist = dist(e.touches);
-        }
-      }, { passive: true });
-
-      document.addEventListener('touchmove', function(e) {
-        if (zooming && e.touches.length === 2) {
-          var d = dist(e.touches);
-          var delta = d / lastDist;
-          scale = Math.min(Math.max(scale * delta, 0.5), 4);
-          lastDist = d;
-          document.body.style.transform = 'scale(' + scale + ')';
-          document.body.style.transformOrigin = 'center top';
-        }
-      }, { passive: true });
-
-      document.addEventListener('touchend', function(e) {
-        if (e.touches.length < 2) {
-          zooming = false;
-          if (Math.abs(scale - 1) < 0.05) {
-            scale = 1;
-            document.body.style.transform = '';
-          }
-        }
-      }, { passive: true });
-
-      // Double-tap to reset zoom
-      var lastTap = 0;
-      document.addEventListener('touchend', function(e) {
-        if (e.touches.length === 0) {
-          var now = Date.now();
-          if (now - lastTap < 300 && scale !== 1) {
-            scale = 1;
-            document.body.style.transform = '';
-            document.body.style.transformOrigin = '';
-          }
-          lastTap = now;
-        }
-      }, { passive: true });
-
-      // Ctrl+scroll zoom on desktop
-      document.addEventListener('wheel', function(e) {
-        if (e.ctrlKey) {
-          e.preventDefault();
-          var delta = e.deltaY > 0 ? 0.95 : 1.05;
-          scale = Math.min(Math.max(scale * delta, 0.5), 4);
-          document.body.style.transform = 'scale(' + scale + ')';
-          document.body.style.transformOrigin = 'center top';
-          if (Math.abs(scale - 1) < 0.02) {
-            scale = 1;
-            document.body.style.transform = '';
-          }
-        }
-      }, { passive: false });
-    })();
-  </script>
 
   <script src="flutter_bootstrap.js" async></script>
 </body>
