@@ -162,29 +162,33 @@ class _RosterCalendar extends ConsumerWidget {
           ),
         ),
 
-        // Horizontal scrolling blocks
+        // Horizontal scrolling blocks with pinch-to-zoom
         Expanded(
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 100),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: days.map((date) {
-                final duties = roster.dutiesForDate(date);
-                final noteKey = '${date.year}-${date.month}-${date.day}';
-                final note = notes[noteKey];
-                final dayTasks = tasks[noteKey];
-                final customColor = customColors[noteKey];
+          child: InteractiveViewer(
+            minScale: 0.5,
+            maxScale: 3.0,
+            constrained: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 100),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: days.map((date) {
+                  final duties = roster.dutiesForDate(date);
+                  final noteKey = '${date.year}-${date.month}-${date.day}';
+                  final note = notes[noteKey];
+                  final dayTasks = tasks[noteKey];
+                  final customColor = customColors[noteKey];
 
-                return _HorizontalDayBlock(
-                  date: date,
-                  duties: duties,
-                  note: note,
-                  tasks: dayTasks,
-                  customColor: customColor,
-                  onTap: () => _showDayDetail(context, ref, date, duties, notes, tasks, customColors),
-                );
-              }).toList(),
+                  return _HorizontalDayBlock(
+                    date: date,
+                    duties: duties,
+                    note: note,
+                    tasks: dayTasks,
+                    customColor: customColor,
+                    onTap: () => _showDayDetail(context, ref, date, duties, notes, tasks, customColors),
+                  );
+                }).toList(),
+              ),
             ),
           ),
         ),
