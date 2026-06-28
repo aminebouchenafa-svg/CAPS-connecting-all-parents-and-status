@@ -9,6 +9,6 @@ final rosterParserProvider = Provider<RosterParser>((ref) => RosterParser());
 
 final dutyNotesProvider = StateProvider<Map<String, String>>((ref) => {});
 
-final dutyTasksProvider = StateProvider<Map<String, List<String>>>((ref) => {});
+final dutyTasksProvider = StateProvider<Map<String, List<Map<String, dynamic>>>>((ref) => {});
 
 final dutyColorsProvider = StateProvider<Map<String, int>>((ref) => {});

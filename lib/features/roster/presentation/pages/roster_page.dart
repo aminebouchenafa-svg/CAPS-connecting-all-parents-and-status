@@ -228,14 +228,17 @@ class _RosterCalendar extends ConsumerWidget {
     DateTime date,
     List<RosterDuty> duties,
     Map<String, String> existingNotes,
-    Map<String, List<String>> existingTasks,
+    Map<String, List<Map<String, dynamic>>> existingTasks,
     Map<String, int> existingColors,
   ) {
     final noteKey = '${date.year}-${date.month}-${date.day}';
     final dayName = _dayNamesFull[date.weekday - 1];
     final noteController = TextEditingController(text: existingNotes[noteKey] ?? '');
     final taskController = TextEditingController();
-    final localTasks = List<String>.from(existingTasks[noteKey] ?? <String>[]);
+    final localTasks = List<Map<String, dynamic>>.from(
+      (existingTasks[noteKey] ?? <Map<String, dynamic>>[]).map((t) => Map<String, dynamic>.from(t)),
+    );
+    int selectedRappelColor = 0;
     int? selectedColorIndex = existingColors[noteKey];
 
     showModalBottomSheet(
@@ -358,40 +361,152 @@ class _RosterCalendar extends ConsumerWidget {
                   const Divider(),
                   const SizedBox(height: 8),
 
-                  // Rappels (checklist)
+                  // Rappels
                   Row(
                     children: [
-                      Icon(Icons.checklist, size: 20, color: AppColors.primary),
+                      Icon(Icons.notifications_active, size: 20, color: AppColors.primary),
                       const SizedBox(width: 8),
                       Text('Rappels', style: AppTextStyles.bodyBold),
-                      const SizedBox(width: 6),
-                      Text('(à cocher)', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+                      const Spacer(),
+                      if (localTasks.isNotEmpty)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text('${localTasks.length}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 8),
 
-                  ...localTasks.asMap().entries.map((entry) => Padding(
-                    padding: const EdgeInsets.only(bottom: 4),
-                    child: Row(
+                  if (localTasks.isNotEmpty)
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 200),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: localTasks.length,
+                        itemBuilder: (_, idx) {
+                          final task = localTasks[idx];
+                          final text = task['text'] as String? ?? '';
+                          final colorIdx = task['color'] as int? ?? 0;
+                          final rappelColors = [
+                            const Color(0xFF2980B9),
+                            const Color(0xFFE74C3C),
+                            const Color(0xFFF39C12),
+                            const Color(0xFF27AE60),
+                            const Color(0xFF8E44AD),
+                            const Color(0xFFE91E63),
+                            const Color(0xFF1ABC9C),
+                          ];
+                          final c = colorIdx < rappelColors.length ? rappelColors[colorIdx] : rappelColors[0];
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: c.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border(left: BorderSide(color: c, width: 4)),
+                              ),
+                              child: ListTile(
+                                dense: true,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+                                visualDensity: VisualDensity.compact,
+                                leading: Icon(Icons.circle, size: 12, color: c),
+                                title: Text(text, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                                trailing: GestureDetector(
+                                  onTap: () => setSheetState(() => localTasks.removeAt(idx)),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Icon(Icons.delete_outline, size: 18, color: Colors.red[400]),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+
+                  if (localTasks.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey.withValues(alpha: 0.2), style: BorderStyle.solid),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.add_alert, size: 18, color: Colors.grey[400]),
+                          const SizedBox(width: 8),
+                          Text('Aucun rappel', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
+                        ],
+                      ),
+                    ),
+
+                  const SizedBox(height: 10),
+
+                  // Color picker for new rappel
+                  Builder(builder: (_) {
+                    final rappelColors = <(String, Color)>[
+                      ('Bleu', const Color(0xFF2980B9)),
+                      ('Rouge', const Color(0xFFE74C3C)),
+                      ('Orange', const Color(0xFFF39C12)),
+                      ('Vert', const Color(0xFF27AE60)),
+                      ('Violet', const Color(0xFF8E44AD)),
+                      ('Rose', const Color(0xFFE91E63)),
+                      ('Turquoise', const Color(0xFF1ABC9C)),
+                    ];
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.check_circle, size: 18, color: AppColors.statusRepos),
-                        const SizedBox(width: 8),
-                        Expanded(child: Text(entry.value, style: AppTextStyles.body)),
-                        GestureDetector(
-                          onTap: () => setSheetState(() => localTasks.removeAt(entry.key)),
-                          child: Icon(Icons.close, size: 16, color: Colors.grey[400]),
+                        Text('Couleur du rappel', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: rappelColors.asMap().entries.map((entry) {
+                            final idx = entry.key;
+                            final color = entry.value.$2;
+                            final isSelected = selectedRappelColor == idx;
+                            return GestureDetector(
+                              onTap: () => setSheetState(() => selectedRappelColor = idx),
+                              child: Container(
+                                width: 30,
+                                height: 30,
+                                margin: const EdgeInsets.only(right: 6),
+                                decoration: BoxDecoration(
+                                  color: color.withValues(alpha: isSelected ? 1.0 : 0.3),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: isSelected ? color : Colors.transparent,
+                                    width: isSelected ? 2.5 : 0,
+                                  ),
+                                ),
+                                child: isSelected ? Icon(Icons.check, size: 16, color: Colors.white) : null,
+                              ),
+                            );
+                          }).toList(),
                         ),
                       ],
-                    ),
-                  )),
+                    );
+                  }),
+                  const SizedBox(height: 8),
 
+                  // Add rappel input
                   Row(
                     children: [
                       Expanded(
                         child: TextField(
                           controller: taskController,
                           decoration: InputDecoration(
-                            hintText: 'Ex: Récupérer les enfants, RDV médecin...',
+                            hintText: 'Nouveau rappel...',
                             hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -404,7 +519,10 @@ class _RosterCalendar extends ConsumerWidget {
                         onPressed: () {
                           if (taskController.text.trim().isNotEmpty) {
                             setSheetState(() {
-                              localTasks.add(taskController.text.trim());
+                              localTasks.add({
+                                'text': taskController.text.trim(),
+                                'color': selectedRappelColor,
+                              });
                               taskController.clear();
                             });
                           }
@@ -449,7 +567,7 @@ class _RosterCalendar extends ConsumerWidget {
                         if (noteText.isEmpty) { cn.remove(noteKey); } else { cn[noteKey] = noteText; }
                         ref.read(dutyNotesProvider.notifier).state = cn;
 
-                        final ct = Map<String, List<String>>.from(ref.read(dutyTasksProvider));
+                        final ct = Map<String, List<Map<String, dynamic>>>.from(ref.read(dutyTasksProvider));
                         if (localTasks.isEmpty) { ct.remove(noteKey); } else { ct[noteKey] = localTasks; }
                         ref.read(dutyTasksProvider.notifier).state = ct;
 
@@ -572,7 +690,7 @@ class _HorizontalDayBlock extends StatelessWidget {
   final DateTime date;
   final List<RosterDuty> duties;
   final String? note;
-  final List<String>? tasks;
+  final List<Map<String, dynamic>>? tasks;
   final int? customColor;
   final VoidCallback onTap;
 
@@ -704,31 +822,34 @@ class _HorizontalDayBlock extends StatelessWidget {
                       ),
                     ],
 
-                    // Tasks visible in block
+                    // Rappels visible in block
                     if (tasks != null && tasks!.isNotEmpty) ...[
                       const SizedBox(height: 4),
-                      ...tasks!.take(3).map((task) => Padding(
-                        padding: const EdgeInsets.only(bottom: 2),
-                        child: Row(
-                          children: [
-                            Icon(Icons.check_circle_outline, size: 10, color: color.withValues(alpha: 0.7)),
-                            const SizedBox(width: 3),
-                            Expanded(
-                              child: Text(
-                                task,
-                                style: TextStyle(fontSize: 8, color: Colors.grey[700]),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                      ...tasks!.take(2).map((task) {
+                        final rappelColors = [
+                          const Color(0xFF2980B9), const Color(0xFFE74C3C),
+                          const Color(0xFFF39C12), const Color(0xFF27AE60),
+                          const Color(0xFF8E44AD), const Color(0xFFE91E63),
+                          const Color(0xFF1ABC9C),
+                        ];
+                        final cIdx = task['color'] as int? ?? 0;
+                        final c = cIdx < rappelColors.length ? rappelColors[cIdx] : rappelColors[0];
+                        final text = task['text'] as String? ?? '';
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 2),
+                          child: Row(
+                            children: [
+                              Container(width: 6, height: 6, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
+                              const SizedBox(width: 3),
+                              Expanded(
+                                child: Text(text, style: TextStyle(fontSize: 8, color: Colors.grey[700]), maxLines: 1, overflow: TextOverflow.ellipsis),
                               ),
-                            ),
-                          ],
-                        ),
-                      )),
-                      if (tasks!.length > 3)
-                        Text(
-                          '+${tasks!.length - 3}',
-                          style: TextStyle(fontSize: 8, color: Colors.grey[500]),
-                        ),
+                            ],
+                          ),
+                        );
+                      }),
+                      if (tasks!.length > 2)
+                        Text('+${tasks!.length - 2}', style: TextStyle(fontSize: 8, color: Colors.grey[500])),
                     ],
 
                     // Note & tasks indicator
