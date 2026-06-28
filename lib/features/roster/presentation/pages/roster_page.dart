@@ -517,6 +517,21 @@ class _RosterCalendar extends ConsumerWidget {
                 if (duty.checkOut != null) ...[const Spacer(), Text(_fmtTime(duty.checkOut!), style: TextStyle(fontWeight: FontWeight.w700, color: AppColors.statusRepos, fontSize: 13))],
               ],
             ),
+          ] else if (!duty.isFlight && (duty.checkIn != null || duty.checkOut != null)) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.schedule, size: 16, color: color),
+                const SizedBox(width: 6),
+                if (duty.checkIn != null) Text('Début: ${_fmtTime(duty.checkIn!)}', style: TextStyle(fontWeight: FontWeight.w600, color: color, fontSize: 13)),
+                if (duty.checkIn != null && duty.checkOut != null) const SizedBox(width: 16),
+                if (duty.checkOut != null) Text('Fin: ${_fmtTime(duty.checkOut!)}', style: TextStyle(fontWeight: FontWeight.w600, color: color.withValues(alpha: 0.7), fontSize: 13)),
+              ],
+            ),
+            if (duty.notes != null) ...[
+              const SizedBox(height: 4),
+              Text(duty.notes!, style: AppTextStyles.body),
+            ],
           ],
         ],
       ),

@@ -312,6 +312,9 @@ class RosterParser {
           RegExp(r'page\s+\d').hasMatch(lower)) {
         break;
       }
+      // Stop at single-char indicator row (e.g. "I") or timestamp
+      if (RegExp(r'^[A-Z]$').hasMatch(line)) break;
+      if (RegExp(r'\d{2}-\d{2}-\d{4}\s+at').hasMatch(line)) break;
       // Skip if this line is a substring of the activity row (duplicate artifact)
       if (line.length > 10 && actRowText.contains(line)) continue;
       dataLines.add(line);
@@ -372,10 +375,33 @@ class RosterParser {
       }
     }
 
-    // Skip time mapping — time rows include ESIM/training times making
-    // counts unpredictable without column alignment. Focus on flight
-    // numbers and routes which are the critical data.
+    // Map check-in/check-out times to timed activity days.
+    // Timed days = any day with a duty that has scheduled times:
+    //   flights, ESIM, ING1-5, ARRT, DEPL, INST
+    // Excluded (no times): /, /RH, //, RH, OFF, DO, JA, ABS, HS, C/O
+    const _noTimeCodes = {'/', '/RH', '//', 'RH', 'OFF', 'DO', 'JA', 'ABS', 'HS', 'C/O', 'REPOS', 'REST'};
+    final timedDayIndices = <int>[];
+    for (int di = 0; di < dayDates.length; di++) {
+      final act = dayActivities[di];
+      if (act == null) continue;
+      final upper = act.toUpperCase();
+      if (_noTimeCodes.contains(upper)) continue;
+      timedDayIndices.add(di);
+    }
+
     final flightTimes = <int, ({String checkIn, String checkOut})>{};
+    if (timeRows.length >= 2) {
+      final checkInRow = timeRows[0];
+      final checkOutRow = timeRows[1];
+      final n = [checkInRow.length, checkOutRow.length, timedDayIndices.length]
+          .reduce((a, b) => a < b ? a : b);
+      for (int i = 0; i < n; i++) {
+        flightTimes[timedDayIndices[i]] = (
+          checkIn: checkInRow[i],
+          checkOut: checkOutRow[i],
+        );
+      }
+    }
 
     // Step 8: Extract extra flight rows (2nd legs, 3rd legs, etc.)
     final extraFlightRows = <List<String>>[];
@@ -453,10 +479,13 @@ class RosterParser {
       final upper = entry.value;
 
       if (_avioDevCodes.contains(upper)) {
+        final times = flightTimes[di];
         duties.add(RosterDuty(
           date: date,
           type: _avioDevType(upper),
           notes: _avioDevLabel(upper),
+          checkIn: _timeFromStr(date.year, date.month, date.day, times?.checkIn),
+          checkOut: _timeFromStr(date.year, date.month, date.day, times?.checkOut),
         ));
         continue;
       }
@@ -525,6 +554,17 @@ class RosterParser {
         final leg = e.value[l];
         debugSb.writeln('  Day ${date?.day} leg${l + 2} ${leg.fn}: ${leg.dep ?? "?"} → ${leg.arr ?? "?"}');
       }
+    }
+    debugSb.writeln('Time rows found: ${timeRows.length}');
+    for (int r = 0; r < timeRows.length; r++) {
+      debugSb.writeln('  Time row $r (${timeRows[r].length}): ${timeRows[r].join(" ")}');
+    }
+    debugSb.writeln('Timed days: ${timedDayIndices.length} indices: $timedDayIndices');
+    debugSb.writeln('Times mapped: ${flightTimes.length}');
+    for (final e in flightTimes.entries) {
+      final date = e.key < dayDates.length ? dayDates[e.key] : null;
+      final act = dayActivities[e.key] ?? '?';
+      debugSb.writeln('  Day ${date?.day} ($act): ${e.value.checkIn} → ${e.value.checkOut}');
     }
     debugSb.writeln('Flights detected: ${duties.where((d) => d.isFlight).length}');
     lastDebugInfo = debugSb.toString();
