@@ -25,6 +25,22 @@ class RosterParser {
     'QSF': 'Sétif',
     'GHA': 'Ghardaïa',
     'TMR': 'Tamanrasset',
+    'AZR': 'Adrar',
+    'TMX': 'Timimoun',
+    'ELU': 'El Oued',
+    'LOO': 'Laghouat',
+    'MZW': 'Mecheria',
+    'IAM': 'In Amenas',
+    'HME': 'Hassi Messaoud',
+    'OGX': 'Ouargla',
+    'INZ': 'In Salah',
+    'DJG': 'Djanet',
+    'TID': 'Tiaret',
+    'BFW': 'Sidi Bel Abbès',
+    'MUW': 'Mascara',
+    'TIN': 'Tindouf',
+    'BSK': 'Biskra',
+    'EBH': 'El Bayadh',
     'JFK': 'New York JFK',
     'LHR': 'Londres',
     'FRA': 'Francfort',
@@ -155,6 +171,47 @@ class RosterParser {
 
     final coveredDays = duties.map((d) => d.date.day).toSet();
     _fillActivityDays(text, duties, year, month, daysInMonth, coveredDays);
+
+    // Fix cross-midnight flights: if arrival is before departure, the flight
+    // crossed midnight so add 1 day to the arrival time.
+    for (int i = 0; i < duties.length; i++) {
+      final d = duties[i];
+      if (d.isFlight && d.checkIn != null && d.checkOut != null &&
+          d.checkOut!.isBefore(d.checkIn!)) {
+        duties[i] = RosterDuty(
+          date: d.date,
+          type: d.type,
+          flightNumber: d.flightNumber,
+          departure: d.departure,
+          arrival: d.arrival,
+          checkIn: d.checkIn,
+          checkOut: d.checkOut!.add(const Duration(days: 1)),
+          notes: d.notes,
+          activityCode: d.activityCode,
+        );
+      }
+    }
+
+    // Sanity check: flag flights with unrealistic duration (> 16h)
+    for (int i = 0; i < duties.length; i++) {
+      final d = duties[i];
+      if (d.isFlight && d.checkIn != null && d.checkOut != null) {
+        final durationMin = d.checkOut!.difference(d.checkIn!).inMinutes;
+        if (durationMin > 16 * 60) {
+          duties[i] = RosterDuty(
+            date: d.date,
+            type: d.type,
+            flightNumber: d.flightNumber,
+            departure: d.departure,
+            arrival: d.arrival,
+            checkIn: d.checkIn,
+            checkOut: null,
+            notes: '${d.notes ?? ''} [durée suspecte]'.trim(),
+            activityCode: d.activityCode,
+          );
+        }
+      }
+    }
 
     duties.sort((a, b) {
       final cmp = a.date.compareTo(b.date);
@@ -324,6 +381,7 @@ class RosterParser {
 
     final dayActivities = <int, String>{};
     final flightDayIndices = <int>[];
+    final outstationDayIndices = <int>[];
     int dayIdx = 0;
 
     for (int t = 0; t < actTokens.length && dayIdx < dayDates.length; t++) {
@@ -341,6 +399,10 @@ class RosterParser {
         dayActivities[dayIdx] = upper;
         flightDayIndices.add(dayIdx);
         dayIdx++;
+      } else if (RegExp(r'^[A-Z]{3}$').hasMatch(upper) && airportNames.containsKey(upper)) {
+        dayActivities[dayIdx] = upper;
+        outstationDayIndices.add(dayIdx);
+        dayIdx++;
       } else {
         dayActivities[dayIdx] = upper;
         dayIdx++;
@@ -357,12 +419,14 @@ class RosterParser {
     debugSb.writeln('Final tokens (${actTokens.length}): ${actTokens.join(" | ")}');
     debugSb.writeln('Day count: ${dayDates.length}, Mapped: $dayIdx');
     debugSb.writeln('Flight days: ${flightDayIndices.length}');
+    debugSb.writeln('Outstation days: ${outstationDayIndices.length}');
     for (final entry in dayActivities.entries) {
       final di = entry.key;
       final date = di < dayDates.length ? dayDates[di] : null;
       final dayNum = date?.day ?? '?';
       final isF = flightDayIndices.contains(di) ? ' [FLIGHT]' : '';
-      debugSb.writeln('  Day $dayNum (idx $di): ${entry.value}$isF');
+      final isO = outstationDayIndices.contains(di) ? ' [OUTSTATION]' : '';
+      debugSb.writeln('  Day $dayNum (idx $di): ${entry.value}$isF$isO');
     }
 
     // Step 4: Collect data lines between activity row and stats section.
@@ -410,20 +474,35 @@ class RosterParser {
     }
 
     // Step 6: Map airport pairs to flight days.
-    // Airport rows only contain data for actual flights. ESIM is a
-    // simulator briefing and does NOT have airport data. Map first N
-    // airports directly to the first N flight days in order.
+    // Airport rows contain data for actual flights. Outstation days (airport
+    // code in activity row) may also have entries in airport rows.
+    // Detect which mapping to use by comparing entry counts.
     final nFlights = flightDayIndices.length;
     final flightRoutes = <int, ({String dep, String arr})>{};
 
     if (airportRows.length >= 2) {
       final depRow = airportRows[0];
       final arrRow = airportRows[1];
-      final n = [depRow.length, arrRow.length, nFlights]
+
+      // Build combined list of days that may have airport data
+      final allAirportDays = [...flightDayIndices, ...outstationDayIndices]..sort();
+
+      // If airport row count matches combined list, outstation days have entries
+      final List<int> mappingIndices;
+      if (allAirportDays.length > nFlights && depRow.length == allAirportDays.length) {
+        mappingIndices = allAirportDays;
+      } else {
+        mappingIndices = flightDayIndices;
+      }
+
+      final n = [depRow.length, arrRow.length, mappingIndices.length]
           .reduce((a, b) => a < b ? a : b);
 
       for (int i = 0; i < n; i++) {
-        flightRoutes[flightDayIndices[i]] = (dep: depRow[i], arr: arrRow[i]);
+        final dayIndex = mappingIndices[i];
+        if (flightDayIndices.contains(dayIndex)) {
+          flightRoutes[dayIndex] = (dep: depRow[i], arr: arrRow[i]);
+        }
       }
     }
 
@@ -455,6 +534,7 @@ class RosterParser {
       if (act == null) continue;
       final upper = act.toUpperCase();
       if (_noTimeCodes.contains(upper)) continue;
+      if (outstationDayIndices.contains(di)) continue;
       timedDayIndices.add(di);
     }
 
@@ -648,12 +728,22 @@ class RosterParser {
         continue;
       }
 
-      duties.add(RosterDuty(
-        date: date,
-        type: DutyType.off,
-        activityCode: upper,
-        notes: upper,
-      ));
+      // Check if token is a known airport code (outstation day)
+      if (RegExp(r'^[A-Z]{3}$').hasMatch(upper) && airportNames.containsKey(upper)) {
+        duties.add(RosterDuty(
+          date: date,
+          type: DutyType.rest,
+          activityCode: upper,
+          notes: 'Escale ${airportNames[upper]}',
+        ));
+      } else {
+        duties.add(RosterDuty(
+          date: date,
+          type: DutyType.off,
+          activityCode: upper,
+          notes: upper,
+        ));
+      }
     }
 
     // Store debug info
