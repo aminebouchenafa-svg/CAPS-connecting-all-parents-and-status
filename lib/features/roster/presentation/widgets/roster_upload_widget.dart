@@ -208,12 +208,7 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
                 '$flightCount vols trouvés.',
               ),
               backgroundColor: AppColors.success,
-              action: SnackBarAction(
-                label: 'Debug',
-                textColor: Colors.white,
-                onPressed: () => _showRawTextDialog(
-                    context, text, roster, parser.lastDebugInfo),
-              ),
+              duration: const Duration(seconds: 3),
             ),
           );
         }
