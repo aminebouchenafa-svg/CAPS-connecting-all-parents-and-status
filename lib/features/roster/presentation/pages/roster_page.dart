@@ -148,7 +148,7 @@ class _RosterCalendar extends ConsumerWidget {
 
         // Stats
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
           child: Row(
             children: [
               _MiniStat(label: 'Vols', value: '${roster.flightDays}j', color: AppColors.statusEnVol),
@@ -158,6 +158,36 @@ class _RosterCalendar extends ConsumerWidget {
               _MiniStat(label: 'Block', value: '${roster.totalBlockHours.toStringAsFixed(0)}h', color: AppColors.accent),
               const SizedBox(width: 6),
               _MiniStat(label: 'Atterr.', value: '${roster.totalLandings}', color: AppColors.primary),
+            ],
+          ),
+        ),
+
+        // Totals + Codes button
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _showTotalsAndCodes(context),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primary.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.bar_chart, size: 16, color: AppColors.primary),
+                        const SizedBox(width: 6),
+                        Text('Totaux & Codes', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -219,6 +249,144 @@ class _RosterCalendar extends ConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+
+  void _showTotalsAndCodes(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.75,
+        minChildSize: 0.4,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (ctx, scrollController) => Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+          child: ListView(
+            controller: scrollController,
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // TOTALS section
+              Row(
+                children: [
+                  Icon(Icons.bar_chart, size: 22, color: AppColors.primary),
+                  const SizedBox(width: 8),
+                  Text('TOTAUX', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.primary)),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              if (roster.allStats.isNotEmpty)
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+                  ),
+                  child: Column(
+                    children: roster.allStats.entries.toList().asMap().entries.map((entry) {
+                      final idx = entry.key;
+                      final stat = entry.value;
+                      final isHours = stat.value.contains(':');
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: idx.isEven ? Colors.grey.withValues(alpha: 0.04) : Colors.transparent,
+                          border: idx > 0 ? Border(top: BorderSide(color: Colors.grey.withValues(alpha: 0.15))) : null,
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(stat.key, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
+                            ),
+                            Text(
+                              stat.value,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                color: isHours ? AppColors.primary : AppColors.accent,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                )
+              else
+                Text('Aucun total disponible', style: TextStyle(color: Colors.grey[400])),
+
+              const SizedBox(height: 24),
+
+              // CODE EXPLANATIONS section
+              Row(
+                children: [
+                  Icon(Icons.info_outline, size: 22, color: AppColors.accent),
+                  const SizedBox(width: 8),
+                  Text('CODES', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.accent)),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              if (roster.codeExplanations.isNotEmpty)
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+                  ),
+                  child: Column(
+                    children: roster.codeExplanations.entries.toList().asMap().entries.map((entry) {
+                      final idx = entry.key;
+                      final code = entry.value;
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: idx.isEven ? Colors.grey.withValues(alpha: 0.04) : Colors.transparent,
+                          border: idx > 0 ? Border(top: BorderSide(color: Colors.grey.withValues(alpha: 0.15))) : null,
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 60,
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: AppColors.accent.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                code.key,
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.accent),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(code.value, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                )
+              else
+                Text('Aucun code disponible', style: TextStyle(color: Colors.grey[400])),
+
+              const SizedBox(height: 20),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

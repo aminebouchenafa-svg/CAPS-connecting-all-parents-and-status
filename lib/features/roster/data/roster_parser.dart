@@ -61,6 +61,8 @@ class RosterParser {
     final period = _extractPeriod(text);
     final stats = _parseStats(text);
     final duties = _parseDuties(text, period.$1);
+    final allStats = _parseAllStats(text);
+    final codeExplanations = _parseCodeExplanations(text);
 
     return Roster(
       pilotName: pilotName,
@@ -75,6 +77,8 @@ class RosterParser {
       totalLandings: (stats['landings'] ?? 0).toInt(),
       offDays: (stats['offDays'] ?? 0).toInt(),
       flightDays: (stats['flightDays'] ?? 0).toInt(),
+      allStats: allStats,
+      codeExplanations: codeExplanations,
     );
   }
 
@@ -969,17 +973,21 @@ class RosterParser {
 
   static String _avioDevLabel(String code) {
     return switch (code) {
-      '/' => 'OFF',
+      '/' => 'Sans activité programmée',
       '//' => 'Repos post-courrier',
       '/RH' || 'RH' => 'Repos Hebdomadaire',
       'OFF' || 'DO' || 'JA' => 'OFF',
-      'ESIM' => 'Simulateur',
-      'ING1' || 'ING2' || 'ING3' || 'ING4' || 'ING5' => 'Formation',
+      'ESIM' => 'Simulateur à l\'Etranger',
+      'ING1' => 'Simu NG Kouba 04:30 UTC',
+      'ING2' => 'Simu NG Kouba',
+      'ING3' => 'Simu NG Kouba 13:00 UTC',
+      'ING4' => 'Simu NG Kouba',
+      'ING5' => 'Simu NG Kouba 08:45 UTC',
       'ARRT' => 'Arrivée tardive',
       'DEPL' => 'Mission',
       'ABS' => 'Absence',
       'HS' => 'Home Standby',
-      'INST' => 'Instruction',
+      'INST' => 'Instructeur Ligne PNT',
       'C/O' => 'Check Out',
       'SBY' || 'STBY' || 'STANDBY' => 'Standby',
       'REPOS' || 'REST' => 'Repos',
@@ -1051,6 +1059,50 @@ class RosterParser {
     }
 
     return stats;
+  }
+
+  Map<String, String> _parseAllStats(String text) {
+    final stats = <String, String>{};
+    final statPatterns = [
+      (r'Block\s*Hours?\s+(\d+:\d+)', 'Block Hours'),
+      (r'Duty\s*Hours?\s+(\d+:\d+)', 'Duty Hours'),
+      (r'Night\s*Hours?\s+(\d+:\d+)', 'Night Hours'),
+      (r'S1\s*Hours?\s+(\d+:\d+)', 'S1 Hours'),
+      (r'International\s+Layover\s+Hours?\s+(\d+:\d+)', 'International Layover Hours'),
+      (r'Domestic\s+Layover\s+Hours?\s+(\d+:\d+)', 'Domestic Layover Hours'),
+      (r'Out\s+of\s+Base\s+Rest\s+(\d+:\d+)', 'Out of Base Rest'),
+      (r'Time\s+Away\s+from\s+Base\s+(\d+:\d+)', 'Time Away from Base'),
+      (r'StandBy\s*Days?\s+(\d+)', 'StandBy Days'),
+      (r'Training\s*Days?\s+(\d+)', 'Training Days'),
+      (r'Off\s*Days?\s+(\d+)', 'Off Days'),
+      (r'Flight\s*Days?\s+(\d+)', 'Flight Days'),
+      (r'Landings?\s+(\d+)', 'Landings'),
+    ];
+    for (final (pattern, label) in statPatterns) {
+      final match = RegExp(pattern).firstMatch(text);
+      if (match != null) {
+        stats[label] = match.group(1)!;
+      }
+    }
+    return stats;
+  }
+
+  Map<String, String> _parseCodeExplanations(String text) {
+    final codes = <String, String>{};
+    final section = RegExp(r'CODE\s*EXPLANATIONS?(.*?)(?:TOTALS|OTHER\s+TRAINING|$)', dotAll: true)
+        .firstMatch(text);
+    if (section == null) return codes;
+    final block = section.group(1)!;
+    final lines = RegExp(r'(\S+)\s*\|\s*(.+?)(?=\n|\s{2,}\S+\s*\||$)')
+        .allMatches(block);
+    for (final m in lines) {
+      final code = m.group(1)!.trim();
+      final desc = m.group(2)!.trim();
+      if (code != 'CODE' && desc != 'DESCRIPTION') {
+        codes[code] = desc;
+      }
+    }
+    return codes;
   }
 
   static String airportName(String code) => airportNames[code] ?? code;

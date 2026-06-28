@@ -62,6 +62,8 @@ class Roster extends Equatable {
   final int totalLandings;
   final int offDays;
   final int flightDays;
+  final Map<String, String> allStats;
+  final Map<String, String> codeExplanations;
 
   const Roster({
     required this.pilotName,
@@ -76,6 +78,8 @@ class Roster extends Equatable {
     this.totalLandings = 0,
     this.offDays = 0,
     this.flightDays = 0,
+    this.allStats = const {},
+    this.codeExplanations = const {},
   });
 
   List<RosterDuty> get flights =>
