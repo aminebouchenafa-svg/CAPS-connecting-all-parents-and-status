@@ -1722,7 +1722,7 @@ class _RosterCalendar extends ConsumerWidget {
                 if (duty.checkIn != null) ...[
                   const Spacer(),
                   Text(
-                    _fmtTime(duty.checkIn!),
+                    '${_fmtTime(duty.checkIn!)} UTC',
                     style: TextStyle(fontWeight: FontWeight.w700, color: isDark ? color : color.withValues(alpha: 0.85), fontSize: 13, shadows: isDark ? [Shadow(color: color.withValues(alpha: 0.5), blurRadius: 4)] : []),
                   ),
                 ],
@@ -1737,7 +1737,7 @@ class _RosterCalendar extends ConsumerWidget {
                 if (duty.checkOut != null) ...[
                   const Spacer(),
                   Text(
-                    _fmtTime(duty.checkOut!),
+                    '${_fmtTime(duty.checkOut!)} UTC',
                     style: TextStyle(fontWeight: FontWeight.w700, color: isDark ? AppColors.neonGreen : const Color(0xFF2E7D32), fontSize: 13, shadows: isDark ? [Shadow(color: AppColors.neonGreen.withValues(alpha: 0.5), blurRadius: 4)] : []),
                   ),
                 ],
@@ -1977,7 +1977,7 @@ class _HorizontalDayBlock extends StatelessWidget {
                             ),
                             if (flight.checkIn != null && flight.checkOut != null)
                               Text(
-                                '${_fmtTime(flight.checkIn!)} - ${_fmtTime(flight.checkOut!)}',
+                                '${_fmtTime(flight.checkIn!)} - ${_fmtTime(flight.checkOut!)} UTC',
                                 style: TextStyle(fontSize: 10, color: onSurface.withValues(alpha: 0.4)),
                               ),
                           ],
