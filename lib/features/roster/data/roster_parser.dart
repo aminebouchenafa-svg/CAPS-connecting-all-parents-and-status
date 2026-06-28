@@ -536,7 +536,31 @@ class RosterParser {
       }
     }
 
-    // Step 8: Build duties
+    // Step 8a: Map extra time rows (3rd/4th) to extra legs
+    final extraLegTimes = <int, List<({String checkIn, String checkOut})>>{};
+    if (timeRows.length >= 4) {
+      for (int tier = 0; tier * 2 + 2 < timeRows.length && tier * 2 + 3 < timeRows.length; tier++) {
+        final extraCheckIn = timeRows[2 + tier * 2];
+        final extraCheckOut = timeRows[3 + tier * 2];
+
+        final daysWithExtraLegs = flightDayIndices
+            .where((fi) => extraLegs.containsKey(fi) && extraLegs[fi]!.length > tier)
+            .toList();
+
+        final n = [extraCheckIn.length, extraCheckOut.length, daysWithExtraLegs.length]
+            .reduce((a, b) => a < b ? a : b);
+
+        for (int i = 0; i < n; i++) {
+          extraLegTimes.putIfAbsent(daysWithExtraLegs[i], () => []);
+          extraLegTimes[daysWithExtraLegs[i]]!.add((
+            checkIn: extraCheckIn[i],
+            checkOut: extraCheckOut[i],
+          ));
+        }
+      }
+    }
+
+    // Step 8b: Build duties
     final duties = <RosterDuty>[];
 
     for (final entry in dayActivities.entries) {
@@ -583,16 +607,21 @@ class RosterParser {
               date.year, date.month, date.day, times?.checkOut),
         ));
 
-        // Add 2nd leg if available
+        // Add 2nd+ legs if available, with their times
         final extras = extraLegs[di];
         if (extras != null) {
-          for (final leg in extras) {
+          final legTimes = extraLegTimes[di];
+          for (int li = 0; li < extras.length; li++) {
+            final leg = extras[li];
+            final lt = legTimes != null && li < legTimes.length ? legTimes[li] : null;
             duties.add(RosterDuty(
               date: date,
               type: DutyType.flight,
               flightNumber: leg.fn,
               departure: leg.dep,
               arrival: leg.arr,
+              checkIn: _timeFromStr(date.year, date.month, date.day, lt?.checkIn),
+              checkOut: _timeFromStr(date.year, date.month, date.day, lt?.checkOut),
             ));
           }
         }
@@ -642,6 +671,14 @@ class RosterParser {
       final date = e.key < dayDates.length ? dayDates[e.key] : null;
       final act = dayActivities[e.key] ?? '?';
       debugSb.writeln('  Day ${date?.day} ($act): ${e.value.checkIn} → ${e.value.checkOut}');
+    }
+    debugSb.writeln('Extra leg times mapped: ${extraLegTimes.length}');
+    for (final e in extraLegTimes.entries) {
+      final date = e.key < dayDates.length ? dayDates[e.key] : null;
+      for (int l = 0; l < e.value.length; l++) {
+        final lt = e.value[l];
+        debugSb.writeln('  Day ${date?.day} leg${l + 2}: ${lt.checkIn} → ${lt.checkOut}');
+      }
     }
     debugSb.writeln('Flights detected: ${duties.where((d) => d.isFlight).length}');
     lastDebugInfo = debugSb.toString();

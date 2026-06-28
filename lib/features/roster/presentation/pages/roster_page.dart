@@ -9,6 +9,7 @@ import '../../data/roster_share.dart';
 import '../../domain/entities/roster_duty.dart';
 import '../providers/roster_provider.dart';
 import '../widgets/roster_upload_widget.dart';
+import 'roster_day_page.dart';
 import 'roster_stats_page.dart';
 import 'roster_week_page.dart';
 
@@ -53,6 +54,15 @@ class RosterPage extends ConsumerWidget {
         backgroundColor: AppColors.backgroundDark,
         actions: [
           if (roster != null) ...[
+            IconButton(
+              icon: const Icon(Icons.today),
+              tooltip: 'Vue Jour',
+              color: AppColors.neonMagenta,
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => RosterDayPage(date: DateTime.now())),
+              ),
+            ),
             IconButton(
               icon: const Icon(Icons.calendar_view_week),
               tooltip: 'Vue Semaine',
@@ -399,7 +409,11 @@ class _RosterCalendar extends ConsumerWidget {
                   note: note,
                   tasks: dayTasks,
                   customColor: customColor,
-                  onTap: () => _showDayDetail(context, ref, date, duties, notes, tasks, customColors),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => RosterDayPage(date: date)),
+                  ),
+                  onLongPress: () => _showDayDetail(context, ref, date, duties, notes, tasks, customColors),
                 );
               }).toList(),
             ),
@@ -1203,6 +1217,7 @@ class _HorizontalDayBlock extends StatelessWidget {
   final List<Map<String, dynamic>>? tasks;
   final int? customColor;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   const _HorizontalDayBlock({
     required this.date,
@@ -1211,6 +1226,7 @@ class _HorizontalDayBlock extends StatelessWidget {
     required this.tasks,
     required this.customColor,
     required this.onTap,
+    this.onLongPress,
   });
 
   @override
@@ -1222,6 +1238,7 @@ class _HorizontalDayBlock extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         width: 140,
