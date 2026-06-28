@@ -436,6 +436,8 @@ class _RosterCalendar extends ConsumerWidget {
                         a.date!.month == date.month &&
                         a.date!.day == date.day).toList();
 
+                    final serviceInfo = checker.serviceInfoForDate(date);
+
                     return _HorizontalDayBlock(
                       date: date,
                       duties: duties,
@@ -443,6 +445,9 @@ class _RosterCalendar extends ConsumerWidget {
                       tasks: dayTasks,
                       customColor: customColor,
                       ftlAlerts: dayAlerts,
+                      serviceStartLT: serviceInfo.serviceStartLT,
+                      heureLimiteLT: serviceInfo.heureLimite,
+                      etapes: serviceInfo.legs,
                       onTap: () => _showDayDetail(context, ref, date, duties, notes, tasks, customColors),
                     );
                   }).toList(),
@@ -1529,22 +1534,10 @@ class _RosterCalendar extends ConsumerWidget {
     final isDark = Theme.of(ctx).brightness == Brightness.dark;
     final onSurface = Theme.of(ctx).colorScheme.onSurface;
 
-    final firstDep = flights
-        .where((f) => f.checkIn != null)
-        .map((f) => f.checkIn!)
-        .fold<DateTime?>(null, (prev, t) => prev == null || t.isBefore(prev) ? t : prev);
-    final lastArr = flights
-        .where((f) => f.checkOut != null)
-        .map((f) => f.checkOut!)
-        .fold<DateTime?>(null, (prev, t) => prev == null || t.isAfter(prev) ? t : prev);
+    final checker = FtlChecker(roster);
+    final info = checker.serviceInfoForDate(flights.first.date);
 
-    if (firstDep == null && lastArr == null) return const SizedBox.shrink();
-
-    final serviceStart = firstDep?.subtract(const Duration(hours: 1));
-    final serviceEnd = lastArr?.add(const Duration(minutes: 30));
-    final totalService = serviceStart != null && serviceEnd != null
-        ? serviceEnd.difference(serviceStart)
-        : null;
+    if (info.serviceStartLT == null) return const SizedBox.shrink();
 
     return Container(
       margin: const EdgeInsets.only(top: 8, bottom: 4),
@@ -1565,7 +1558,7 @@ class _RosterCalendar extends ConsumerWidget {
               Icon(Icons.timer_outlined, size: 18, color: AppColors.neonOrange),
               const SizedBox(width: 8),
               Text(
-                'Temps de service',
+                'Temps de service (LT)',
                 style: TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w800,
@@ -1573,37 +1566,54 @@ class _RosterCalendar extends ConsumerWidget {
                   shadows: isDark ? [Shadow(color: AppColors.neonOrange.withValues(alpha: 0.5), blurRadius: 4)] : [],
                 ),
               ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.neonPurple.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: AppColors.neonPurple.withValues(alpha: 0.4)),
+                ),
+                child: Text(
+                  '${info.legs} étape${info.legs > 1 ? 's' : ''}',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.neonPurple,
+                    shadows: isDark ? [Shadow(color: AppColors.neonPurple.withValues(alpha: 0.5), blurRadius: 3)] : [],
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 10),
-          if (serviceStart != null)
-            Row(
-              children: [
-                Icon(Icons.login, size: 16, color: isDark ? AppColors.neonGreen : const Color(0xFF2E7D32)),
-                const SizedBox(width: 8),
-                Text('Prise de service', style: TextStyle(fontSize: 13, color: onSurface.withValues(alpha: 0.7))),
-                const Spacer(),
-                Text(
-                  _fmtTime(serviceStart),
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                    color: isDark ? AppColors.neonGreen : const Color(0xFF2E7D32),
-                    shadows: isDark ? [Shadow(color: AppColors.neonGreen.withValues(alpha: 0.5), blurRadius: 4)] : [],
-                  ),
+          Row(
+            children: [
+              Icon(Icons.login, size: 16, color: isDark ? AppColors.neonGreen : const Color(0xFF2E7D32)),
+              const SizedBox(width: 8),
+              Text('Prise de service', style: TextStyle(fontSize: 13, color: onSurface.withValues(alpha: 0.7))),
+              const Spacer(),
+              Text(
+                '${_fmtTime(info.serviceStartLT!)} LT',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? AppColors.neonGreen : const Color(0xFF2E7D32),
+                  shadows: isDark ? [Shadow(color: AppColors.neonGreen.withValues(alpha: 0.5), blurRadius: 4)] : [],
                 ),
-              ],
-            ),
-          if (serviceEnd != null) ...[
+              ),
+            ],
+          ),
+          if (info.heureLimite != null) ...[
             const SizedBox(height: 6),
             Row(
               children: [
-                Icon(Icons.logout, size: 16, color: isDark ? AppColors.neonRed : const Color(0xFFC62828)),
+                Icon(Icons.block, size: 16, color: isDark ? AppColors.neonRed : const Color(0xFFC62828)),
                 const SizedBox(width: 8),
-                Text('Fin de service', style: TextStyle(fontSize: 13, color: onSurface.withValues(alpha: 0.7))),
+                Text('Heure limite d\'arrêt', style: TextStyle(fontSize: 13, color: onSurface.withValues(alpha: 0.7))),
                 const Spacer(),
                 Text(
-                  _fmtTime(serviceEnd),
+                  '${_fmtTime(info.heureLimite!)} LT',
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
@@ -1614,21 +1624,41 @@ class _RosterCalendar extends ConsumerWidget {
               ],
             ),
           ],
-          if (totalService != null) ...[
+          if (info.maxTsv != null) ...[
             const SizedBox(height: 6),
             Row(
               children: [
-                Icon(Icons.hourglass_bottom, size: 16, color: isDark ? AppColors.neonYellow : const Color(0xFFF57F17)),
+                Icon(Icons.hourglass_top, size: 16, color: isDark ? AppColors.neonYellow : const Color(0xFFF57F17)),
                 const SizedBox(width: 8),
-                Text('Durée totale', style: TextStyle(fontSize: 13, color: onSurface.withValues(alpha: 0.7))),
+                Text('TSV max autorisé', style: TextStyle(fontSize: 13, color: onSurface.withValues(alpha: 0.7))),
                 const Spacer(),
                 Text(
-                  '${totalService.inHours}h${(totalService.inMinutes % 60).toString().padLeft(2, '0')}',
+                  '${info.maxTsv!.inHours}h${(info.maxTsv!.inMinutes % 60).toString().padLeft(2, '0')}',
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.w800,
                     color: isDark ? AppColors.neonYellow : const Color(0xFFF57F17),
                     shadows: isDark ? [Shadow(color: AppColors.neonYellow.withValues(alpha: 0.5), blurRadius: 4)] : [],
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (info.tsv != null) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Icon(Icons.hourglass_bottom, size: 16, color: isDark ? AppColors.neonCyan : const Color(0xFF00838F)),
+                const SizedBox(width: 8),
+                Text('TSV effectif', style: TextStyle(fontSize: 13, color: onSurface.withValues(alpha: 0.7))),
+                const Spacer(),
+                Text(
+                  '${info.tsv!.inHours}h${(info.tsv!.inMinutes % 60).toString().padLeft(2, '0')}',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? AppColors.neonCyan : const Color(0xFF00838F),
+                    shadows: isDark ? [Shadow(color: AppColors.neonCyan.withValues(alpha: 0.5), blurRadius: 4)] : [],
                   ),
                 ),
               ],
@@ -1796,6 +1826,9 @@ class _HorizontalDayBlock extends StatelessWidget {
   final List<Map<String, dynamic>>? tasks;
   final int? customColor;
   final List<FtlAlert> ftlAlerts;
+  final DateTime? serviceStartLT;
+  final DateTime? heureLimiteLT;
+  final int etapes;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
 
@@ -1806,6 +1839,9 @@ class _HorizontalDayBlock extends StatelessWidget {
     required this.tasks,
     required this.customColor,
     this.ftlAlerts = const [],
+    this.serviceStartLT,
+    this.heureLimiteLT,
+    this.etapes = 0,
     required this.onTap,
     this.onLongPress,
   });
@@ -1894,6 +1930,25 @@ class _HorizontalDayBlock extends StatelessWidget {
                     const SizedBox(height: 5),
 
                     if (flights.isNotEmpty) ...[
+                      if (etapes > 0)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.neonPurple.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: AppColors.neonPurple.withValues(alpha: 0.4)),
+                          ),
+                          child: Text(
+                            '$etapes étape${etapes > 1 ? 's' : ''}',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.neonPurple,
+                              shadows: isDark ? [Shadow(color: AppColors.neonPurple.withValues(alpha: 0.5), blurRadius: 3)] : [],
+                            ),
+                          ),
+                        ),
                       ...flights.map((flight) => Padding(
                         padding: const EdgeInsets.only(bottom: 4),
                         child: Column(
@@ -1928,7 +1983,7 @@ class _HorizontalDayBlock extends StatelessWidget {
                           ],
                         ),
                       )),
-                      _buildServiceTimes(flights, color, onSurface, isDark),
+                      _buildServiceTimes(color, onSurface, isDark),
                     ] else if (duties.isNotEmpty && duties.first.type == DutyType.standby) ...[
                       const SizedBox(height: 6),
                       Icon(Icons.access_time, size: 24, color: color),
@@ -2068,20 +2123,8 @@ class _HorizontalDayBlock extends StatelessWidget {
     );
   }
 
-  Widget _buildServiceTimes(List<RosterDuty> flights, Color color, Color onSurface, bool isDark) {
-    final firstDep = flights
-        .where((f) => f.checkIn != null)
-        .map((f) => f.checkIn!)
-        .fold<DateTime?>(null, (prev, t) => prev == null || t.isBefore(prev) ? t : prev);
-    final lastArr = flights
-        .where((f) => f.checkOut != null)
-        .map((f) => f.checkOut!)
-        .fold<DateTime?>(null, (prev, t) => prev == null || t.isAfter(prev) ? t : prev);
-
-    if (firstDep == null && lastArr == null) return const SizedBox.shrink();
-
-    final serviceStart = firstDep?.subtract(const Duration(hours: 1));
-    final serviceEnd = lastArr?.add(const Duration(minutes: 30));
+  Widget _buildServiceTimes(Color color, Color onSurface, bool isDark) {
+    if (serviceStartLT == null) return const SizedBox.shrink();
 
     return Container(
       width: double.infinity,
@@ -2096,31 +2139,30 @@ class _HorizontalDayBlock extends StatelessWidget {
       ),
       child: Column(
         children: [
-          if (serviceStart != null)
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.login, size: 11, color: AppColors.neonGreen),
-                const SizedBox(width: 3),
-                Text(
-                  _fmtTime(serviceStart),
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? AppColors.neonGreen : const Color(0xFF2E7D32),
-                  ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.login, size: 11, color: AppColors.neonGreen),
+              const SizedBox(width: 3),
+              Text(
+                '${_fmtTime(serviceStartLT!)} LT',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? AppColors.neonGreen : const Color(0xFF2E7D32),
                 ),
-              ],
-            ),
-          if (serviceEnd != null) ...[
+              ),
+            ],
+          ),
+          if (heureLimiteLT != null) ...[
             const SizedBox(height: 2),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.logout, size: 11, color: AppColors.neonRed),
+                Icon(Icons.block, size: 11, color: AppColors.neonRed),
                 const SizedBox(width: 3),
                 Text(
-                  _fmtTime(serviceEnd),
+                  '${_fmtTime(heureLimiteLT!)} LT',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,

@@ -24,6 +24,14 @@ class FtlChecker {
 
   FtlChecker(this.roster) : _base = roster.base;
 
+  int get _utcOffset => const <String, int>{
+    'ALG': 1, 'ORN': 1, 'AAE': 1, 'CZL': 1, 'TMR': 1,
+    'GHA': 1, 'TLM': 1, 'BJA': 1, 'QSF': 1, 'BLJ': 1,
+    'HME': 1, 'OGX': 1, 'TAM': 1, 'INZ': 1, 'DJG': 1,
+  }[_base.toUpperCase()] ?? 1;
+
+  DateTime _toLocal(DateTime utc) => utc.add(Duration(hours: _utcOffset));
+
   List<FtlAlert> checkAll() {
     final alerts = <FtlAlert>[];
     alerts.addAll(checkAmplitude());
@@ -62,13 +70,14 @@ class FtlChecker {
       if (serviceStart == null || serviceEnd == null) continue;
 
       final tsvMinutes = serviceEnd.difference(serviceStart).inMinutes;
-      final maxTsv = _maxTsvMinutes(serviceStart.hour, legs);
+      final serviceStartLT = _toLocal(serviceStart);
+      final maxTsv = _maxTsvMinutes(serviceStartLT.hour, legs);
 
       if (maxTsv == null) {
         alerts.add(FtlAlert(
           severity: FtlSeverity.violation,
           title: 'Trop d\'étapes',
-          detail: '$legs étapes non autorisées pour un début de TSV à ${_fmtHour(serviceStart.hour)}',
+          detail: '$legs étapes non autorisées pour un début de TSV à ${_fmtHour(serviceStartLT.hour)} LT',
           article: 'Art. 22',
           date: date,
         ));
@@ -82,7 +91,7 @@ class FtlChecker {
           title: 'Hors amplitude',
           detail: 'TSV: ${tsvH}h${tsvM.toString().padLeft(2, '0')} '
               '(max: ${maxH}h${maxM.toString().padLeft(2, '0')} '
-              'pour $legs étape${legs > 1 ? 's' : ''} à ${_fmtHour(serviceStart.hour)})',
+              'pour $legs étape${legs > 1 ? 's' : ''} à ${_fmtHour(serviceStartLT.hour)} LT)',
           article: 'Art. 22',
           date: date,
         ));
@@ -178,8 +187,8 @@ class FtlChecker {
 
       // Art. 45: Post-flight rest when TSV > 11h
       if (prevTsvMinutes != null && prevTsvMinutes > 11 * 60) {
-        final prevEndHour = prevEnd.hour;
-        final first2hNotNight = prevEndHour >= 6 && prevEndHour < 19;
+        final prevEndHourLT = _toLocal(prevEnd).hour;
+        final first2hNotNight = prevEndHourLT >= 6 && prevEndHourLT < 19;
         final required45 = first2hNotNight ? 24 * 60 : 12 * 60;
         if (restMinutes < required45) {
           alerts.add(FtlAlert(
@@ -344,7 +353,7 @@ class FtlChecker {
       final flights = flightDays[date]!;
       final isNight = flights.any((f) {
         if (f.checkIn == null) return false;
-        final h = f.checkIn!.hour;
+        final h = _toLocal(f.checkIn!).hour;
         return h >= 21 || h < 6;
       });
 
@@ -522,7 +531,8 @@ class FtlChecker {
     // Check if the rest period includes time between 21h and 05h
     var t = end;
     while (t.isBefore(start)) {
-      if (t.hour >= 21 || t.hour < 5) return true;
+      final localHour = _toLocal(t).hour;
+    if (localHour >= 21 || localHour < 5) return true;
       t = t.add(const Duration(hours: 1));
     }
     return false;
@@ -546,16 +556,34 @@ class FtlChecker {
 
   // ── Summary helpers ──
 
-  ({Duration? tsv, DateTime? serviceStart, DateTime? serviceEnd, int legs}) serviceInfoForDate(DateTime date) {
+  ({Duration? tsv, DateTime? serviceStartLT, DateTime? heureLimite, DateTime? serviceEndLT, int legs, Duration? maxTsv}) serviceInfoForDate(DateTime date) {
     final key = DateTime(date.year, date.month, date.day);
     final flights = _flightsByDay()[key];
     if (flights == null || flights.isEmpty) {
-      return (tsv: null, serviceStart: null, serviceEnd: null, legs: 0);
+      return (tsv: null, serviceStartLT: null, heureLimite: null, serviceEndLT: null, legs: 0, maxTsv: null);
     }
     final start = _serviceStart(flights);
     final end = _serviceEnd(flights);
     final tsv = start != null && end != null ? end.difference(start) : null;
-    return (tsv: tsv, serviceStart: start, serviceEnd: end, legs: flights.length);
+
+    DateTime? startLT;
+    DateTime? endLT;
+    DateTime? heureLimite;
+    Duration? maxTsvDuration;
+
+    if (start != null) {
+      startLT = _toLocal(start);
+      final maxMin = _maxTsvMinutes(startLT.hour, flights.length);
+      if (maxMin != null) {
+        maxTsvDuration = Duration(minutes: maxMin);
+        heureLimite = startLT.add(Duration(minutes: maxMin));
+      }
+    }
+    if (end != null) {
+      endLT = _toLocal(end);
+    }
+
+    return (tsv: tsv, serviceStartLT: startLT, heureLimite: heureLimite, serviceEndLT: endLT, legs: flights.length, maxTsv: maxTsvDuration);
   }
 
   ({int required, int actual, bool compliant}) rhSummary() {
