@@ -358,12 +358,14 @@ class _RosterCalendar extends ConsumerWidget {
                   const Divider(),
                   const SizedBox(height: 8),
 
-                  // Rappels
+                  // Rappels (checklist)
                   Row(
                     children: [
                       Icon(Icons.checklist, size: 20, color: AppColors.primary),
                       const SizedBox(width: 8),
                       Text('Rappels', style: AppTextStyles.bodyBold),
+                      const SizedBox(width: 6),
+                      Text('(à cocher)', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -414,12 +416,14 @@ class _RosterCalendar extends ConsumerWidget {
 
                   const SizedBox(height: 16),
 
-                  // Note
+                  // Note (mémo libre)
                   Row(
                     children: [
-                      Icon(Icons.edit_note, size: 20, color: AppColors.accent),
+                      Icon(Icons.edit_note, size: 20, color: Colors.amber[700]),
                       const SizedBox(width: 8),
                       Text('Note', style: AppTextStyles.bodyBold),
+                      const SizedBox(width: 6),
+                      Text('(mémo perso)', style: TextStyle(fontSize: 11, color: Colors.grey[500])),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -427,7 +431,7 @@ class _RosterCalendar extends ConsumerWidget {
                     controller: noteController,
                     maxLines: 2,
                     decoration: InputDecoration(
-                      hintText: 'Ex: Emmener les enfants au sport...',
+                      hintText: 'Ex: Sortie dîner, anniversaire...',
                       hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                       contentPadding: const EdgeInsets.all(12),
