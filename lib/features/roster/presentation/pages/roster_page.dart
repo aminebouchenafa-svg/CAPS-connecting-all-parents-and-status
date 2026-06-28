@@ -455,49 +455,46 @@ class _RosterCalendar extends ConsumerWidget {
                   const SizedBox(height: 10),
 
                   // Color picker for new rappel
-                  Builder(builder: (_) {
-                    final rappelColors = <(String, Color)>[
-                      ('Bleu', const Color(0xFF2980B9)),
-                      ('Rouge', const Color(0xFFE74C3C)),
-                      ('Orange', const Color(0xFFF39C12)),
-                      ('Vert', const Color(0xFF27AE60)),
-                      ('Violet', const Color(0xFF8E44AD)),
-                      ('Rose', const Color(0xFFE91E63)),
-                      ('Turquoise', const Color(0xFF1ABC9C)),
-                    ];
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Couleur du rappel', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: rappelColors.asMap().entries.map((entry) {
-                            final idx = entry.key;
-                            final color = entry.value.$2;
-                            final isSelected = selectedRappelColor == idx;
-                            return GestureDetector(
-                              onTap: () => setSheetState(() => selectedRappelColor = idx),
-                              child: Container(
-                                width: 30,
-                                height: 30,
-                                margin: const EdgeInsets.only(right: 6),
-                                decoration: BoxDecoration(
-                                  color: color.withValues(alpha: isSelected ? 1.0 : 0.3),
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: isSelected ? color : Colors.transparent,
-                                    width: isSelected ? 2.5 : 0,
-                                  ),
-                                ),
-                                child: isSelected ? Icon(Icons.check, size: 16, color: Colors.white) : null,
+                  Text('Couleur du rappel', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      for (int ci = 0; ci < 7; ci++) ...[
+                        GestureDetector(
+                          onTap: () => setSheetState(() => selectedRappelColor = ci),
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            margin: const EdgeInsets.only(right: 6),
+                            decoration: BoxDecoration(
+                              color: [
+                                const Color(0xFF2980B9), const Color(0xFFE74C3C),
+                                const Color(0xFFF39C12), const Color(0xFF27AE60),
+                                const Color(0xFF8E44AD), const Color(0xFFE91E63),
+                                const Color(0xFF1ABC9C),
+                              ][ci].withValues(alpha: selectedRappelColor == ci ? 1.0 : 0.3),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: selectedRappelColor == ci
+                                    ? [
+                                        const Color(0xFF2980B9), const Color(0xFFE74C3C),
+                                        const Color(0xFFF39C12), const Color(0xFF27AE60),
+                                        const Color(0xFF8E44AD), const Color(0xFFE91E63),
+                                        const Color(0xFF1ABC9C),
+                                      ][ci]
+                                    : Colors.transparent,
+                                width: selectedRappelColor == ci ? 2.5 : 0,
                               ),
-                            );
-                          }).toList(),
+                            ),
+                            child: selectedRappelColor == ci
+                                ? const Icon(Icons.check, size: 16, color: Colors.white)
+                                : null,
+                          ),
                         ),
                       ],
-                    );
-                  }),
-                  const SizedBox(height: 8),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
 
                   // Add rappel input
                   Row(
@@ -508,15 +505,15 @@ class _RosterCalendar extends ConsumerWidget {
                           decoration: InputDecoration(
                             hintText: 'Nouveau rappel...',
                             hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                             isDense: true,
                           ),
                         ),
                       ),
                       const SizedBox(width: 8),
-                      IconButton(
-                        onPressed: () {
+                      GestureDetector(
+                        onTap: () {
                           if (taskController.text.trim().isNotEmpty) {
                             setSheetState(() {
                               localTasks.add({
@@ -527,7 +524,14 @@ class _RosterCalendar extends ConsumerWidget {
                             });
                           }
                         },
-                        icon: Icon(Icons.add_circle, color: AppColors.primary, size: 32),
+                        child: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.add, color: Colors.white, size: 24),
+                        ),
                       ),
                     ],
                   ),
@@ -713,11 +717,11 @@ class _HorizontalDayBlock extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 110,
-        margin: const EdgeInsets.only(right: 8),
+        width: 140,
+        margin: const EdgeInsets.only(right: 10),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isToday ? color : color.withValues(alpha: 0.4),
             width: isToday ? 3 : 1.5,
@@ -728,20 +732,20 @@ class _HorizontalDayBlock extends StatelessWidget {
             // Date header
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 6),
+              padding: const EdgeInsets.symmetric(vertical: 8),
               decoration: BoxDecoration(
                 color: color.withValues(alpha: 0.2),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
               ),
               child: Column(
                 children: [
                   Text(
                     '${date.day}',
-                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: color),
+                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: color),
                   ),
                   Text(
                     dayName,
-                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: color),
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: color),
                   ),
                 ],
               ),
@@ -750,24 +754,24 @@ class _HorizontalDayBlock extends StatelessWidget {
             // Content
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.all(5),
+                padding: const EdgeInsets.all(6),
                 child: Column(
                   children: [
                     // Type badge
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(vertical: 3),
+                      padding: const EdgeInsets.symmetric(vertical: 4),
                       decoration: BoxDecoration(
                         color: color,
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
                         _label(),
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 10),
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
                         textAlign: TextAlign.center,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 5),
 
                     // Flight details for each flight
                     if (flights.isNotEmpty) ...[
@@ -775,56 +779,53 @@ class _HorizontalDayBlock extends StatelessWidget {
                         padding: const EdgeInsets.only(bottom: 4),
                         child: Column(
                           children: [
-                            // Flight number
                             Text(
                               flight.flightNumber ?? '',
-                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: color),
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: color),
                             ),
                             const SizedBox(height: 2),
-                            // Route: DEP → ARR
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
                                 Text(
                                   flight.departure ?? '',
-                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.grey[700]),
+                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.grey[700]),
                                 ),
                                 Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 2),
-                                  child: Icon(Icons.arrow_forward, size: 10, color: color),
+                                  padding: const EdgeInsets.symmetric(horizontal: 3),
+                                  child: Icon(Icons.arrow_forward, size: 12, color: color),
                                 ),
                                 Text(
                                   flight.arrival ?? '',
-                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color),
+                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: color),
                                 ),
                               ],
                             ),
-                            // Times
                             if (flight.checkIn != null && flight.checkOut != null)
                               Text(
                                 '${_fmtTime(flight.checkIn!)} - ${_fmtTime(flight.checkOut!)}',
-                                style: TextStyle(fontSize: 8, color: Colors.grey[500]),
+                                style: TextStyle(fontSize: 10, color: Colors.grey[600]),
                               ),
                           ],
                         ),
                       )),
                     ] else if (duties.isNotEmpty && duties.first.type == DutyType.standby) ...[
-                      const SizedBox(height: 4),
-                      Icon(Icons.access_time, size: 20, color: color),
+                      const SizedBox(height: 6),
+                      Icon(Icons.access_time, size: 24, color: color),
                       const SizedBox(height: 2),
-                      Text('Astreinte', style: TextStyle(fontSize: 9, color: color)),
+                      Text('Astreinte', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
                     ] else ...[
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       Icon(
                         duties.isEmpty ? Icons.event_busy : Icons.home,
-                        size: 20,
+                        size: 24,
                         color: color,
                       ),
                     ],
 
                     // Rappels visible in block
                     if (tasks != null && tasks!.isNotEmpty) ...[
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 5),
                       ...tasks!.take(2).map((task) {
                         final rappelColors = [
                           const Color(0xFF2980B9), const Color(0xFFE74C3C),
@@ -836,23 +837,23 @@ class _HorizontalDayBlock extends StatelessWidget {
                         final c = cIdx < rappelColors.length ? rappelColors[cIdx] : rappelColors[0];
                         final text = task['text'] as String? ?? '';
                         return Padding(
-                          padding: const EdgeInsets.only(bottom: 2),
+                          padding: const EdgeInsets.only(bottom: 3),
                           child: Row(
                             children: [
-                              Container(width: 6, height: 6, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
-                              const SizedBox(width: 3),
+                              Container(width: 8, height: 8, decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
+                              const SizedBox(width: 4),
                               Expanded(
-                                child: Text(text, style: TextStyle(fontSize: 8, color: Colors.grey[700]), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                child: Text(text, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.grey[800]), maxLines: 1, overflow: TextOverflow.ellipsis),
                               ),
                             ],
                           ),
                         );
                       }),
                       if (tasks!.length > 2)
-                        Text('+${tasks!.length - 2}', style: TextStyle(fontSize: 8, color: Colors.grey[500])),
+                        Text('+${tasks!.length - 2} rappels', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.grey[500])),
                     ],
 
-                    // Note & tasks indicator
+                    // Note & rappels indicator
                     if (note != null || (tasks != null && tasks!.isNotEmpty)) ...[
                       const Spacer(),
                       Row(
@@ -860,35 +861,35 @@ class _HorizontalDayBlock extends StatelessWidget {
                         children: [
                           if (note != null)
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
                               decoration: BoxDecoration(
                                 color: Colors.amber.withValues(alpha: 0.3),
-                                borderRadius: BorderRadius.circular(4),
+                                borderRadius: BorderRadius.circular(6),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.sticky_note_2, size: 10, color: Colors.amber[800]),
-                                  const SizedBox(width: 2),
-                                  Text('Note', style: TextStyle(fontSize: 7, fontWeight: FontWeight.w700, color: Colors.amber[800])),
+                                  Icon(Icons.sticky_note_2, size: 12, color: Colors.amber[800]),
+                                  const SizedBox(width: 3),
+                                  Text('Note', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.amber[800])),
                                 ],
                               ),
                             ),
                           if (note != null && tasks != null && tasks!.isNotEmpty)
-                            const SizedBox(width: 3),
+                            const SizedBox(width: 4),
                           if (tasks != null && tasks!.isNotEmpty)
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
                               decoration: BoxDecoration(
                                 color: Colors.blue.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(4),
+                                borderRadius: BorderRadius.circular(6),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.checklist, size: 10, color: Colors.blue[700]),
-                                  const SizedBox(width: 2),
-                                  Text('${tasks!.length}', style: TextStyle(fontSize: 7, fontWeight: FontWeight.w700, color: Colors.blue[700])),
+                                  Icon(Icons.notifications_active, size: 12, color: Colors.blue[700]),
+                                  const SizedBox(width: 3),
+                                  Text('${tasks!.length}', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: Colors.blue[700])),
                                 ],
                               ),
                             ),
