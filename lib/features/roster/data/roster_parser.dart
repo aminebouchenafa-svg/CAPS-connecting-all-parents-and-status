@@ -211,6 +211,9 @@ class RosterParser {
 
     if (dateRowIdx < 0 || dayDates.isEmpty) return [];
 
+    // Filter out dates not in the target month (PDF grid may include next month's 1st)
+    dayDates.removeWhere((d) => d.month != month || d.year != year);
+
     // Step 2: Find the activity row (skip day-of-week row)
     int activityRowIdx = -1;
     for (int i = dateRowIdx + 1; i < lines.length; i++) {
@@ -254,7 +257,8 @@ class RosterParser {
     }
 
     if (_countNonSkip(rawTokens) < dayDates.length) {
-      for (int i = activityRowIdx + 1; i < lines.length && i < activityRowIdx + 4; i++) {
+      for (int i = activityRowIdx + 1; i < lines.length && i < activityRowIdx + 5; i++) {
+        if (_countNonSkip(rawTokens) >= dayDates.length) break;
         final line = lines[i].trim();
         if (line.isEmpty) continue;
         final tokens = line.split(RegExp(r'\s+'));
@@ -267,9 +271,8 @@ class RosterParser {
           final upper = t.toUpperCase();
           return _avioDevCodes.contains(upper) || _extractFlightNum(upper) != null;
         }).length;
-        if (actCount >= 2) {
+        if (actCount >= 1) {
           rawTokens = [...rawTokens, ...tokens];
-          break;
         }
       }
     }
@@ -1017,6 +1020,17 @@ class RosterParser {
           notes: _avioDevLabel(next),
         ));
         coveredDays.add(dayNum);
+      }
+    }
+
+    // Fallback: use grid parser for any still-missing days
+    if (coveredDays.length < daysInMonth) {
+      final gridDuties = _tryGridParse(text, year, month, daysInMonth);
+      for (final gd in gridDuties) {
+        if (!coveredDays.contains(gd.date.day)) {
+          duties.add(gd);
+          coveredDays.add(gd.date.day);
+        }
       }
     }
   }
