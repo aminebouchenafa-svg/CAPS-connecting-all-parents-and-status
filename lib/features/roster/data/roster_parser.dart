@@ -62,7 +62,10 @@ class RosterParser {
     final stats = _parseStats(text);
     final duties = _parseDuties(text, period.$1);
     final allStats = _parseAllStats(text);
-    final codeExplanations = _parseCodeExplanations(text);
+    var codeExplanations = _parseCodeExplanations(text);
+    if (codeExplanations.isEmpty) {
+      codeExplanations = _buildFallbackCodeExplanations(duties);
+    }
 
     return Roster(
       pilotName: pilotName,
@@ -236,51 +239,81 @@ class RosterParser {
 
     // Step 3: Parse the activity row - map each token to a day index.
     // PDF extraction can split "//" → "/ /" and "/RH" → "/ RH".
-    // Merge exactly the right number of pairs to match day count,
-    // preferring merges at end of month (where splits are most likely).
-    final rawTokens = lines[activityRowIdx].trim().split(RegExp(r'\s+'));
+    // Strategy: always merge "/ RH" → "/RH" (standalone RH after / is
+    // always /RH in AvioDev). Then merge "/ /" → "//" only if needed.
+    var rawTokens = lines[activityRowIdx].trim().split(RegExp(r'\s+'));
 
-    int rawNonSkipCount = 0;
-    for (final t in rawTokens) {
-      if (_dayOfWeek.hasMatch(t) || _monthAbbr.containsKey(t)) continue;
-      rawNonSkipCount++;
+    // Check if activity row has fewer codes than days - look for continuation
+    int _countNonSkip(List<String> tokens) {
+      int c = 0;
+      for (final t in tokens) {
+        if (_dayOfWeek.hasMatch(t) || _monthAbbr.containsKey(t)) continue;
+        c++;
+      }
+      return c;
     }
-    final mergesNeeded = rawNonSkipCount > dayDates.length
-        ? rawNonSkipCount - dayDates.length
-        : 0;
 
-    final List<String> actTokens;
-    if (mergesNeeded > 0) {
-      // Find all positions where / is followed by / or RH
-      final mergePositions = <int>[];
-      for (int i = 0; i < rawTokens.length - 1; i++) {
-        if (rawTokens[i] == '/') {
-          final next = rawTokens[i + 1];
-          if (next == '/' || next.toUpperCase() == 'RH') {
-            mergePositions.add(i);
-          }
+    if (_countNonSkip(rawTokens) < dayDates.length) {
+      for (int i = activityRowIdx + 1; i < lines.length && i < activityRowIdx + 4; i++) {
+        final line = lines[i].trim();
+        if (line.isEmpty) continue;
+        final tokens = line.split(RegExp(r'\s+'));
+        if (tokens.length >= 15 && tokens.every((t) => _dayOfWeek.hasMatch(t))) continue;
+        final lower = line.toLowerCase();
+        if (lower.contains('block hours') || lower.contains('duty hours') ||
+            lower.contains('code explanations') || lower.contains('totals') ||
+            RegExp(r'page\s+\d').hasMatch(lower)) break;
+        final actCount = tokens.where((t) {
+          final upper = t.toUpperCase();
+          return _avioDevCodes.contains(upper) || _extractFlightNum(upper) != null;
+        }).length;
+        if (actCount >= 2) {
+          rawTokens = [...rawTokens, ...tokens];
+          break;
         }
       }
-      // Pick the last N mergeable positions (end-of-month splits most likely)
+    }
+
+    // Step 3a: Always merge "/ RH" → "/RH"
+    final step1Tokens = <String>[];
+    for (int i = 0; i < rawTokens.length; i++) {
+      if (rawTokens[i] == '/' && i + 1 < rawTokens.length &&
+          rawTokens[i + 1].toUpperCase() == 'RH') {
+        step1Tokens.add('/RH');
+        i++;
+      } else {
+        step1Tokens.add(rawTokens[i]);
+      }
+    }
+
+    // Step 3b: If still too many tokens, merge "/ /" → "//" from end
+    int step1Count = _countNonSkip(step1Tokens);
+    final List<String> actTokens;
+    if (step1Count > dayDates.length) {
+      final extraMerges = step1Count - dayDates.length;
+      final mergePositions = <int>[];
+      for (int i = 0; i < step1Tokens.length - 1; i++) {
+        if (step1Tokens[i] == '/' && step1Tokens[i + 1] == '/') {
+          mergePositions.add(i);
+        }
+      }
       final useMerges = <int>{};
       for (int i = mergePositions.length - 1;
-          i >= 0 && useMerges.length < mergesNeeded;
-          i--) {
+          i >= 0 && useMerges.length < extraMerges; i--) {
         useMerges.add(mergePositions[i]);
       }
       final result = <String>[];
-      for (int i = 0; i < rawTokens.length; i++) {
-        if (useMerges.contains(i) && i + 1 < rawTokens.length) {
-          final next = rawTokens[i + 1];
-          result.add(next == '/' ? '//' : '/RH');
+      for (int i = 0; i < step1Tokens.length; i++) {
+        if (useMerges.contains(i) && i + 1 < step1Tokens.length) {
+          result.add('//');
           i++;
         } else {
-          result.add(rawTokens[i]);
+          result.add(step1Tokens[i]);
         }
       }
       actTokens = result;
     } else {
-      actTokens = List.of(rawTokens);
+      actTokens = step1Tokens;
     }
 
     final dayActivities = <int, String>{};
@@ -314,7 +347,8 @@ class RosterParser {
     final debugSb = StringBuffer();
     debugSb.writeln('=== SEQUENTIAL PARSER DEBUG ===');
     debugSb.writeln('Raw tokens (${rawTokens.length}): ${rawTokens.join(" | ")}');
-    debugSb.writeln('Merged tokens (${actTokens.length}): ${actTokens.join(" | ")}');
+    debugSb.writeln('After /RH merge (${step1Tokens.length}): ${step1Tokens.join(" | ")}');
+    debugSb.writeln('Final tokens (${actTokens.length}): ${actTokens.join(" | ")}');
     debugSb.writeln('Day count: ${dayDates.length}, Mapped: $dayIdx');
     debugSb.writeln('Flight days: ${flightDayIndices.length}');
     for (final entry in dayActivities.entries) {
@@ -406,10 +440,9 @@ class RosterParser {
     }
 
     // Map check-in/check-out times to timed activity days.
-    // Timed days = any day with a duty that has scheduled times:
-    //   flights, ESIM, ING1-5, ARRT, DEPL, INST
-    // Excluded (no times): /, /RH, //, RH, OFF, DO, JA, ABS, HS, C/O
-    const _noTimeCodes = {'/', '/RH', '//', 'RH', 'OFF', 'DO', 'JA', 'ABS', 'C/O', 'REPOS', 'REST'};
+    // Timed = flights, HS, SBY, ING*, ESIM, INST
+    // Excluded: off/rest codes + ARRT/DEPL (no scheduled times in PDF)
+    const _noTimeCodes = {'/', '/RH', '//', 'RH', 'OFF', 'DO', 'JA', 'ABS', 'C/O', 'REPOS', 'REST', 'ARRT', 'DEPL'};
     final timedDayIndices = <int>[];
     for (int di = 0; di < dayDates.length; di++) {
       final act = dayActivities[di];
@@ -510,13 +543,19 @@ class RosterParser {
 
       if (_avioDevCodes.contains(upper)) {
         final times = flightTimes[di];
+        DateTime? checkIn = _timeFromStr(date.year, date.month, date.day, times?.checkIn);
+        DateTime? checkOut = _timeFromStr(date.year, date.month, date.day, times?.checkOut);
+        if (['HS', 'SBY', 'STBY', 'STANDBY'].contains(upper) && checkIn == null && checkOut == null) {
+          checkIn = DateTime(date.year, date.month, date.day, 7, 0);
+          checkOut = DateTime(date.year, date.month, date.day, 21, 0);
+        }
         duties.add(RosterDuty(
           date: date,
           type: _avioDevType(upper),
           activityCode: upper,
           notes: _avioDevLabel(upper),
-          checkIn: _timeFromStr(date.year, date.month, date.day, times?.checkIn),
-          checkOut: _timeFromStr(date.year, date.month, date.day, times?.checkOut),
+          checkIn: checkIn,
+          checkOut: checkOut,
         ));
         continue;
       }
@@ -1122,44 +1161,76 @@ class RosterParser {
   Map<String, String> _parseCodeExplanations(String text) {
     final codes = <String, String>{};
 
-    // Try to find CODE EXPLANATIONS section
-    final section = RegExp(
-      r'CODE\s*EXPLANATION[S]?(.*?)(?:TOTALS|OTHER\s+TRAINING|Page\s+\d|$)',
-      dotAll: true,
-      caseSensitive: false,
-    ).firstMatch(text);
-    if (section == null) return codes;
-    final block = section.group(1)!;
+    // Try multiple section headers
+    final sectionPatterns = [
+      RegExp(r'CODE\s*EXPLANATION[S]?(.*?)(?:TOTALS|OTHER\s+TRAINING|Page\s+\d|$)', dotAll: true, caseSensitive: false),
+      RegExp(r'CODE\s*DESCRIPTION(.*?)(?:TOTALS|OTHER\s+TRAINING|Page\s+\d|$)', dotAll: true, caseSensitive: false),
+      RegExp(r'CODE\s*\|\s*DESCRIPTION(.*?)(?:TOTALS|OTHER\s+TRAINING|Page\s+\d|$)', dotAll: true, caseSensitive: false),
+    ];
 
-    // Try pipe-separated format: CODE | DESCRIPTION
-    final pipeMatches = RegExp(r'(\S+)\s*\|\s*(.+?)(?=\n|\s{2,}\S+\s*\||$)')
-        .allMatches(block);
-    for (final m in pipeMatches) {
-      final code = m.group(1)!.trim();
-      final desc = m.group(2)!.trim();
-      if (code.toUpperCase() != 'CODE' && desc.toUpperCase() != 'DESCRIPTION') {
-        codes[code] = desc;
+    String? block;
+    for (final pattern in sectionPatterns) {
+      final section = pattern.firstMatch(text);
+      if (section != null) {
+        block = section.group(1)!;
+        break;
       }
     }
 
-    // If pipe format found nothing, try space-separated: CODE Description text
-    if (codes.isEmpty) {
-      final spaceLines = block.split('\n');
-      for (final line in spaceLines) {
-        final trimmed = line.trim();
-        if (trimmed.isEmpty) continue;
-        // Match known codes at start of line followed by description
-        final m = RegExp(r'^(//?(?:RH)?|[A-Z][A-Z0-9/]{1,8})\s+(.+)$').firstMatch(trimmed);
-        if (m != null) {
-          final code = m.group(1)!.trim();
-          final desc = m.group(2)!.trim();
-          if (code.toUpperCase() != 'CODE' && desc.toUpperCase() != 'DESCRIPTION' && desc.length > 1) {
-            codes[code] = desc;
+    if (block != null) {
+      // Try pipe-separated format: CODE | DESCRIPTION
+      final pipeMatches = RegExp(r'(\S+)\s*\|\s*(.+?)(?=\n|\s{2,}\S+\s*\||$)')
+          .allMatches(block);
+      for (final m in pipeMatches) {
+        final code = m.group(1)!.trim();
+        final desc = m.group(2)!.trim();
+        if (code.toUpperCase() != 'CODE' && desc.toUpperCase() != 'DESCRIPTION') {
+          codes[code] = desc;
+        }
+      }
+
+      // Try tab-separated format
+      if (codes.isEmpty) {
+        for (final line in block.split('\n')) {
+          final parts = line.split('\t');
+          for (int i = 0; i < parts.length - 1; i += 2) {
+            final code = parts[i].trim();
+            final desc = i + 1 < parts.length ? parts[i + 1].trim() : '';
+            if (code.isNotEmpty && desc.isNotEmpty && code.toUpperCase() != 'CODE') {
+              codes[code] = desc;
+            }
+          }
+        }
+      }
+
+      // Try space-separated: CODE Description text
+      if (codes.isEmpty) {
+        for (final line in block.split('\n')) {
+          final trimmed = line.trim();
+          if (trimmed.isEmpty) continue;
+          final m = RegExp(r'^(//?(?:RH)?|[A-Z][A-Z0-9/]{1,8})\s+(.+)$').firstMatch(trimmed);
+          if (m != null) {
+            final code = m.group(1)!.trim();
+            final desc = m.group(2)!.trim();
+            if (code.toUpperCase() != 'CODE' && desc.toUpperCase() != 'DESCRIPTION' && desc.length > 1) {
+              codes[code] = desc;
+            }
           }
         }
       }
     }
 
+    return codes;
+  }
+
+  Map<String, String> _buildFallbackCodeExplanations(List<RosterDuty> duties) {
+    final codes = <String, String>{};
+    for (final duty in duties) {
+      final code = duty.activityCode;
+      if (code != null && code.isNotEmpty && !codes.containsKey(code)) {
+        codes[code] = _avioDevLabel(code);
+      }
+    }
     return codes;
   }
 
