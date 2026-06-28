@@ -4,11 +4,35 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
-import '../../../../core/widgets/caps_card.dart';
-import '../../../../core/widgets/countdown_display.dart';
-import '../../../../core/widgets/status_badge.dart';
 import '../../domain/entities/flight_status.dart';
 import '../providers/flight_status_provider.dart';
+import '../../../roster/presentation/providers/roster_provider.dart';
+import '../../../roster/domain/entities/roster_duty.dart';
+import '../../../roster/data/roster_parser.dart';
+
+const _dayNames = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+
+Color _neonColorForDuty(RosterDuty duty) {
+  if (duty.isFlight) return AppColors.neonCyan;
+  return switch (duty.type) {
+    DutyType.standby => AppColors.neonOrange,
+    DutyType.rest => AppColors.neonGreen,
+    DutyType.training || DutyType.simulator => AppColors.neonPurple,
+    DutyType.off => AppColors.neonGreen,
+    DutyType.deadhead => AppColors.neonOrange,
+    _ => AppColors.neonCyan,
+  };
+}
+
+Color _statusColor(FlightPhase phase) => switch (phase) {
+      FlightPhase.enVol => AppColors.statusEnVol,
+      FlightPhase.escale => AppColors.statusEscale,
+      FlightPhase.repos => AppColors.statusRepos,
+      FlightPhase.retour => AppColors.statusRetour,
+    };
+
+String _formatTime(DateTime dt) =>
+    '${dt.hour.toString().padLeft(2, '0')}h${dt.minute.toString().padLeft(2, '0')}';
 
 class DashboardPage extends ConsumerWidget {
   const DashboardPage({super.key});
@@ -16,50 +40,498 @@ class DashboardPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final status = ref.watch(rosterFlightStatusProvider);
+    final roster = ref.watch(rosterProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('C.A.P.S.')),
-      body: status != null
-          ? _DashboardContent(status: status)
-          : _NoRosterPrompt(),
+      backgroundColor: AppColors.backgroundDark,
+      appBar: AppBar(
+        backgroundColor: AppColors.surfaceDark,
+        elevation: 0,
+        title: Text(
+          'C.A.P.S.',
+          style: AppTextStyles.heading2.copyWith(
+            color: AppColors.neonCyan,
+            shadows: [
+              Shadow(
+                color: AppColors.neonCyan.withValues(alpha: 0.6),
+                blurRadius: 6,
+              ),
+            ],
+          ),
+        ),
+        centerTitle: true,
+      ),
+      body: roster != null
+          ? _DashboardContent(status: status, roster: roster)
+          : const _NoRosterPrompt(),
     );
   }
 }
 
 class _NoRosterPrompt extends StatelessWidget {
+  const _NoRosterPrompt();
+
   @override
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.flight_takeoff, size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            Text(
-              'Où est Papa ?',
-              style: AppTextStyles.heading2,
-              textAlign: TextAlign.center,
+        child: Container(
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: AppColors.cardDark,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.neonCyan.withValues(alpha: 0.15),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Chargez votre roster dans l\'onglet Roster '
-              'pour voir automatiquement votre programme du jour.',
-              style: AppTextStyles.body.copyWith(color: Colors.grey),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton.icon(
-              onPressed: () => context.goNamed('roster'),
-              icon: const Icon(Icons.flight),
-              label: const Text('Aller au Roster'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24, vertical: 14,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.neonCyan.withValues(alpha: 0.1),
+                blurRadius: 12,
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.flight_takeoff,
+                size: 64,
+                color: AppColors.neonCyan.withValues(alpha: 0.6),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Bienvenue Capitaine',
+                style: AppTextStyles.heading2.copyWith(color: Colors.white),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Chargez votre roster dans l\'onglet Roster '
+                'pour voir automatiquement votre programme.',
+                style: AppTextStyles.body.copyWith(
+                  color: Colors.white.withValues(alpha: 0.6),
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () => context.goNamed('roster'),
+                icon: const Icon(Icons.flight, color: AppColors.backgroundDark),
+                label: const Text(
+                  'Aller au Roster',
+                  style: TextStyle(color: AppColors.backgroundDark),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.neonCyan,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 14,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DashboardContent extends ConsumerWidget {
+  final FlightStatus? status;
+  final Roster roster;
+
+  const _DashboardContent({required this.status, required this.roster});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _TodayCard(status: status, roster: roster),
+          const SizedBox(height: 16),
+          if (_findNextFlight(roster) != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: _NextFlightCard(
+                nextFlight: _findNextFlight(roster)!,
+              ),
             ),
+          _WeekPreview(roster: roster),
+          const SizedBox(height: 16),
+          _QuickStats(roster: roster),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  RosterDuty? _findNextFlight(Roster roster) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    for (final duty in roster.duties) {
+      if (duty.isFlight && duty.date.isAfter(today)) {
+        return duty;
+      }
+      if (duty.isFlight &&
+          duty.date.year == today.year &&
+          duty.date.month == today.month &&
+          duty.date.day == today.day &&
+          duty.checkIn != null &&
+          duty.checkIn!.isAfter(now)) {
+        return duty;
+      }
+    }
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Today Card - hero card showing current status
+// ---------------------------------------------------------------------------
+
+class _TodayCard extends StatelessWidget {
+  final FlightStatus? status;
+  final Roster roster;
+
+  const _TodayCard({required this.status, required this.roster});
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final todayDuties = roster.dutiesForDate(today);
+
+    if (status != null) {
+      return _buildStatusCard(status!);
+    }
+
+    if (todayDuties.isNotEmpty) {
+      return _buildDutyCard(todayDuties.first);
+    }
+
+    return _buildEmptyCard();
+  }
+
+  Widget _buildStatusCard(FlightStatus status) {
+    final glowColor = _statusColor(status.phase);
+    final phaseDesc = switch (status.phase) {
+      FlightPhase.enVol => 'En vol vers sa destination',
+      FlightPhase.escale => 'En escale entre deux vols',
+      FlightPhase.repos => 'A la maison',
+      FlightPhase.retour => 'En route vers la maison',
+    };
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.cardDark,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: glowColor.withValues(alpha: 0.3)),
+        boxShadow: [
+          BoxShadow(
+            color: glowColor.withValues(alpha: 0.2),
+            blurRadius: 20,
+            spreadRadius: -2,
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Phase emoji and label
+          Text(
+            status.phase.emoji,
+            style: const TextStyle(fontSize: 48),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            status.phase.label,
+            style: AppTextStyles.heading2.copyWith(
+              color: glowColor,
+              shadows: [
+                Shadow(
+                  color: glowColor.withValues(alpha: 0.6),
+                  blurRadius: 6,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            phaseDesc,
+            style: AppTextStyles.body.copyWith(
+              color: Colors.white.withValues(alpha: 0.7),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Flight info
+          if (status.flightNumber != null) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: glowColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: glowColor.withValues(alpha: 0.3)),
+              ),
+              child: Text(
+                'Vol ${status.flightNumber}',
+                style: AppTextStyles.bodyBold.copyWith(color: glowColor),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+
+          // Location
+          if (status.currentLocation != null) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.location_on, size: 18, color: glowColor),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    status.currentLocation!,
+                    style: AppTextStyles.body.copyWith(color: Colors.white),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ],
+
+          // Destination
+          if (status.destination != null &&
+              status.phase != FlightPhase.repos) ...[
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.flight_land, size: 18, color: AppColors.neonGreen),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    status.destination!,
+                    style: AppTextStyles.bodyBold.copyWith(
+                      color: AppColors.neonGreen,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ],
+
+          // Countdown for non-repos
+          if (status.phase != FlightPhase.repos &&
+              status.estimatedEndTime != null) ...[
+            const SizedBox(height: 16),
+            _CountdownSection(
+              targetTime: status.estimatedEndTime!,
+              glowColor: glowColor,
+            ),
+          ],
+
+          // Repos - all good
+          if (status.phase == FlightPhase.repos) ...[
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.check_circle, size: 24, color: AppColors.neonGreen),
+                const SizedBox(width: 8),
+                Text(
+                  'Disponible !',
+                  style: AppTextStyles.bodyBold.copyWith(
+                    color: AppColors.neonGreen,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDutyCard(RosterDuty duty) {
+    final glowColor = _neonColorForDuty(duty);
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.cardDark,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: glowColor.withValues(alpha: 0.3)),
+        boxShadow: [
+          BoxShadow(
+            color: glowColor.withValues(alpha: 0.2),
+            blurRadius: 20,
+            spreadRadius: -2,
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Text(
+            _dutyEmoji(duty),
+            style: const TextStyle(fontSize: 48),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            duty.type.label,
+            style: AppTextStyles.heading2.copyWith(
+              color: glowColor,
+              shadows: [
+                Shadow(
+                  color: glowColor.withValues(alpha: 0.6),
+                  blurRadius: 6,
+                ),
+              ],
+            ),
+          ),
+          if (duty.activityCode != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              duty.activityCode!,
+              style: AppTextStyles.body.copyWith(
+                color: Colors.white.withValues(alpha: 0.7),
+              ),
+            ),
+          ],
+          if (duty.notes != null && duty.notes!.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              duty.notes!,
+              style: AppTextStyles.caption.copyWith(
+                color: Colors.white.withValues(alpha: 0.5),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyCard() {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppColors.cardDark,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppColors.neonCyan.withValues(alpha: 0.15),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.neonCyan.withValues(alpha: 0.1),
+            blurRadius: 12,
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          const Text('📋', style: TextStyle(fontSize: 48)),
+          const SizedBox(height: 8),
+          Text(
+            'Aucune activite aujourd\'hui',
+            style: AppTextStyles.heading3.copyWith(color: Colors.white),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Pas de duty programme pour cette journee',
+            style: AppTextStyles.body.copyWith(
+              color: Colors.white.withValues(alpha: 0.5),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _dutyEmoji(RosterDuty duty) => switch (duty.type) {
+        DutyType.flight => '✈️',
+        DutyType.standby => '📟',
+        DutyType.rest => '😴',
+        DutyType.training => '📚',
+        DutyType.off => '🏠',
+        DutyType.simulator => '🎮',
+        DutyType.deadhead => '🚗',
+      };
+}
+
+// ---------------------------------------------------------------------------
+// Countdown Section for today card
+// ---------------------------------------------------------------------------
+
+class _CountdownSection extends StatelessWidget {
+  final DateTime targetTime;
+  final Color glowColor;
+
+  const _CountdownSection({
+    required this.targetTime,
+    required this.glowColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final remaining = targetTime.difference(DateTime.now());
+    if (remaining.isNegative) {
+      return Text(
+        'Arrive bientot',
+        style: AppTextStyles.body.copyWith(color: glowColor),
+      );
+    }
+
+    final hours = remaining.inHours;
+    final minutes = remaining.inMinutes % 60;
+
+    return Column(
+      children: [
+        Text(
+          'De retour dans',
+          style: AppTextStyles.caption.copyWith(
+            color: Colors.white.withValues(alpha: 0.6),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _timeBlock('${hours}h', glowColor),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Text(
+                ':',
+                style: AppTextStyles.heading1.copyWith(color: glowColor),
+              ),
+            ),
+            _timeBlock('${minutes}m', glowColor),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _timeBlock(String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Text(
+        value,
+        style: AppTextStyles.heading1.copyWith(
+          color: color,
+          shadows: [
+            Shadow(color: color.withValues(alpha: 0.6), blurRadius: 6),
           ],
         ),
       ),
@@ -67,236 +539,445 @@ class _NoRosterPrompt extends StatelessWidget {
   }
 }
 
-class _DashboardContent extends StatelessWidget {
-  final FlightStatus status;
+// ---------------------------------------------------------------------------
+// Next Flight Card
+// ---------------------------------------------------------------------------
 
-  const _DashboardContent({required this.status});
+class _NextFlightCard extends StatelessWidget {
+  final RosterDuty nextFlight;
+
+  const _NextFlightCard({required this.nextFlight});
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+    final now = DateTime.now();
+    final flightDate = nextFlight.date;
+    final daysUntil = DateTime(flightDate.year, flightDate.month, flightDate.day)
+        .difference(DateTime(now.year, now.month, now.day))
+        .inDays;
+
+    final dep = nextFlight.departure ?? '';
+    final arr = nextFlight.arrival ?? '';
+    final depName = RosterParser.airportName(dep);
+    final arrName = RosterParser.airportName(arr);
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.cardDark,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppColors.neonCyan.withValues(alpha: 0.2),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.neonCyan.withValues(alpha: 0.15),
+            blurRadius: 12,
+            spreadRadius: -2,
+          ),
+        ],
+      ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header
-          CapsCard(
-            backgroundColor: AppColors.primary.withValues(alpha: 0.05),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 24,
-                  backgroundColor: AppColors.primary,
-                  child: const Text('A', style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  )),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Amine', style: AppTextStyles.heading3),
-                      Text(
-                        _phaseDescription(status.phase),
-                        style: AppTextStyles.caption.copyWith(
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                StatusBadge(phase: status.phase, compact: true),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // Flight info
-          CapsCard(
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      status.phase.emoji,
-                      style: const TextStyle(fontSize: 32),
+          Row(
+            children: [
+              Icon(Icons.flight_takeoff, size: 20, color: AppColors.neonCyan),
+              const SizedBox(width: 8),
+              Text(
+                'Prochain Vol',
+                style: AppTextStyles.heading3.copyWith(
+                  color: AppColors.neonCyan,
+                  shadows: [
+                    Shadow(
+                      color: AppColors.neonCyan.withValues(alpha: 0.6),
+                      blurRadius: 6,
                     ),
-                    const SizedBox(width: 12),
-                    Text('Où est Papa ?', style: AppTextStyles.heading2),
                   ],
                 ),
-                const SizedBox(height: 16),
+              ),
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.neonCyan.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: AppColors.neonCyan.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Text(
+                  daysUntil == 0
+                      ? 'Aujourd\'hui'
+                      : daysUntil == 1
+                          ? 'Demain'
+                          : 'J-$daysUntil',
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.neonCyan,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
 
-                if (status.flightNumber != null) ...[
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 8,
+          // Flight number
+          if (nextFlight.flightNumber != null)
+            Text(
+              nextFlight.flightNumber!,
+              style: AppTextStyles.heading2.copyWith(color: Colors.white),
+            ),
+          const SizedBox(height: 12),
+
+          // Route
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      dep,
+                      style: AppTextStyles.heading3.copyWith(
+                        color: Colors.white,
+                      ),
                     ),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryLight.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
+                    Text(
+                      depName,
+                      style: AppTextStyles.caption.copyWith(
+                        color: Colors.white.withValues(alpha: 0.6),
+                      ),
                     ),
+                  ],
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Icon(
+                  Icons.arrow_forward,
+                  color: AppColors.neonCyan.withValues(alpha: 0.6),
+                  size: 20,
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      arr,
+                      style: AppTextStyles.heading3.copyWith(
+                        color: Colors.white,
+                      ),
+                    ),
+                    Text(
+                      arrName,
+                      style: AppTextStyles.caption.copyWith(
+                        color: Colors.white.withValues(alpha: 0.6),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          // Times
+          if (nextFlight.checkIn != null || nextFlight.checkOut != null) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                if (nextFlight.checkIn != null)
+                  Expanded(
                     child: Text(
-                      'Vol ${status.flightNumber}',
-                      style: AppTextStyles.bodyBold.copyWith(
-                        color: AppColors.primary,
+                      'Depart: ${_formatTime(nextFlight.checkIn!)}',
+                      style: AppTextStyles.caption.copyWith(
+                        color: Colors.white.withValues(alpha: 0.5),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  _buildFlightRoute(),
-                ],
-
-                if (status.flightNumber == null &&
-                    status.currentLocation != null) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.location_on,
-                          size: 18, color: Colors.red[400]),
-                      const SizedBox(width: 6),
-                      Text(status.currentLocation!, style: AppTextStyles.body),
-                    ],
+                if (nextFlight.checkOut != null)
+                  Expanded(
+                    child: Text(
+                      'Arrivee: ${_formatTime(nextFlight.checkOut!)}',
+                      style: AppTextStyles.caption.copyWith(
+                        color: Colors.white.withValues(alpha: 0.5),
+                      ),
+                      textAlign: TextAlign.end,
+                    ),
                   ),
-                ],
               ],
             ),
-          ),
-          const SizedBox(height: 12),
-
-          // Countdown or available
-          if (status.phase == FlightPhase.repos)
-            CapsCard(
-              backgroundColor: AppColors.statusRepos.withValues(alpha: 0.05),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.check_circle,
-                      size: 48, color: AppColors.statusRepos),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Papa est à la maison',
-                        style: AppTextStyles.heading3.copyWith(
-                          color: AppColors.statusRepos,
-                        ),
-                      ),
-                      Text('Disponible !', style: AppTextStyles.body),
-                    ],
-                  ),
-                ],
-              ),
-            )
-          else if (status.estimatedEndTime != null)
-            CapsCard(
-              child: Column(
-                children: [
-                  Text(
-                    'Papa sera disponible dans',
-                    style: AppTextStyles.heading3.copyWith(
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  CountdownDisplay(
-                    targetTime: status.estimatedEndTime!,
-                  ),
-                ],
-              ),
-            ),
-          const SizedBox(height: 12),
-
-          // Notes
-          if (status.notes != null && status.notes!.isNotEmpty)
-            CapsCard(
-              backgroundColor: AppColors.accent.withValues(alpha: 0.05),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.info_outline,
-                          size: 18, color: AppColors.accent),
-                      const SizedBox(width: 8),
-                      Text(
-                        status.phase == FlightPhase.repos
-                            ? 'Prochain vol'
-                            : 'Détails du vol',
-                        style: AppTextStyles.heading3.copyWith(
-                          color: AppColors.accent,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(status.notes!, style: AppTextStyles.body),
-                ],
-              ),
-            ),
-          const SizedBox(height: 16),
+          ],
         ],
       ),
     );
   }
+}
 
-  Widget _buildFlightRoute() {
-    final notes = status.notes ?? '';
-    final lines = notes.split('\n');
+// ---------------------------------------------------------------------------
+// Week Preview - horizontal scrollable 7-day view
+// ---------------------------------------------------------------------------
 
-    String? departTime;
-    String? arriveTime;
-    for (final line in lines) {
-      if (line.contains('Départ prévu')) {
-        departTime = line.split(':').skip(1).join(':').trim();
-      }
-      if (line.contains('Arrivée prévue')) {
-        arriveTime = line.split(':').skip(1).join(':').trim();
-      }
-    }
+class _WeekPreview extends StatelessWidget {
+  final Roster roster;
+
+  const _WeekPreview({required this.roster});
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final days = List.generate(7, (i) => today.add(Duration(days: i)));
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.flight_takeoff, size: 18, color: AppColors.primary),
-            const SizedBox(width: 6),
-            Text(status.currentLocation ?? '', style: AppTextStyles.body),
-          ],
-        ),
-        if (departTime != null)
-          Text(departTime,
-              style: AppTextStyles.caption.copyWith(color: Colors.grey)),
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Icon(Icons.arrow_downward, size: 20, color: Colors.grey[400]),
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Text(
+            'Semaine a venir',
+            style: AppTextStyles.heading3.copyWith(
+              color: Colors.white,
+            ),
+          ),
         ),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.flight_land, size: 18, color: AppColors.statusRepos),
-            const SizedBox(width: 6),
-            Text(status.destination ?? '', style: AppTextStyles.bodyBold),
-          ],
+        SizedBox(
+          height: 100,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: 7,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (context, index) {
+              final date = days[index];
+              final duties = roster.dutiesForDate(date);
+              final isToday = index == 0;
+              return _DayBlock(
+                date: date,
+                duties: duties,
+                isToday: isToday,
+              );
+            },
+          ),
         ),
-        if (arriveTime != null)
-          Text(arriveTime,
-              style: AppTextStyles.caption.copyWith(color: Colors.grey)),
       ],
     );
   }
+}
 
-  String _phaseDescription(FlightPhase phase) => switch (phase) {
-        FlightPhase.enVol => 'En vol vers sa destination',
-        FlightPhase.escale => 'En escale entre deux vols',
-        FlightPhase.repos => 'À la maison, disponible',
-        FlightPhase.retour => 'En route vers la maison',
-      };
+class _DayBlock extends StatelessWidget {
+  final DateTime date;
+  final List<RosterDuty> duties;
+  final bool isToday;
+
+  const _DayBlock({
+    required this.date,
+    required this.duties,
+    required this.isToday,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Monday = 1 in Dart, so index = weekday - 1
+    final dayName = _dayNames[date.weekday - 1];
+    final hasDuties = duties.isNotEmpty;
+    final primaryDuty = hasDuties ? duties.first : null;
+    final glowColor =
+        primaryDuty != null ? _neonColorForDuty(primaryDuty) : AppColors.neonCyan;
+
+    final label = primaryDuty != null
+        ? (primaryDuty.isFlight
+            ? (primaryDuty.flightNumber ?? 'Vol')
+            : (primaryDuty.activityCode ?? primaryDuty.type.label))
+        : '-';
+
+    return Container(
+      width: 72,
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      decoration: BoxDecoration(
+        color: isToday
+            ? glowColor.withValues(alpha: 0.15)
+            : AppColors.cardDark,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isToday
+              ? glowColor.withValues(alpha: 0.5)
+              : glowColor.withValues(alpha: 0.15),
+        ),
+        boxShadow: isToday
+            ? [
+                BoxShadow(
+                  color: glowColor.withValues(alpha: 0.2),
+                  blurRadius: 8,
+                  spreadRadius: -2,
+                ),
+              ]
+            : null,
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            dayName,
+            style: AppTextStyles.caption.copyWith(
+              color: Colors.white.withValues(alpha: 0.6),
+              fontWeight: isToday ? FontWeight.w700 : FontWeight.w400,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '${date.day}',
+            style: AppTextStyles.heading3.copyWith(
+              color: isToday ? glowColor : Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: glowColor.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              label.length > 6 ? label.substring(0, 6) : label,
+              style: AppTextStyles.caption.copyWith(
+                color: glowColor,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Quick Stats - row of stat cards
+// ---------------------------------------------------------------------------
+
+class _QuickStats extends StatelessWidget {
+  final Roster roster;
+
+  const _QuickStats({required this.roster});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Text(
+            'Statistiques du mois',
+            style: AppTextStyles.heading3.copyWith(color: Colors.white),
+          ),
+        ),
+        Row(
+          children: [
+            Expanded(
+              child: _StatCard(
+                label: 'Block',
+                value: '${roster.totalBlockHours.toStringAsFixed(1)}h',
+                icon: Icons.access_time,
+                color: AppColors.neonCyan,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _StatCard(
+                label: 'Vols',
+                value: '${roster.flightDays}',
+                icon: Icons.flight,
+                color: AppColors.neonMagenta,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _StatCard(
+                label: 'OFF',
+                value: '${roster.offDays}',
+                icon: Icons.weekend,
+                color: AppColors.neonGreen,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _StatCard(
+                label: 'Ldg',
+                value: '${roster.totalLandings}',
+                icon: Icons.flight_land,
+                color: AppColors.neonOrange,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+      decoration: BoxDecoration(
+        color: AppColors.cardDark,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+        boxShadow: [
+          BoxShadow(
+            color: color.withValues(alpha: 0.1),
+            blurRadius: 8,
+            spreadRadius: -2,
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 20, color: color),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: AppTextStyles.heading3.copyWith(
+              color: color,
+              shadows: [
+                Shadow(
+                  color: color.withValues(alpha: 0.6),
+                  blurRadius: 6,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: AppTextStyles.caption.copyWith(
+              color: Colors.white.withValues(alpha: 0.6),
+              fontSize: 10,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

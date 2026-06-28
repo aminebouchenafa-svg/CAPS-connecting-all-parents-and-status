@@ -45,11 +45,19 @@ class _CountdownDisplayState extends State<CountdownDisplay> {
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.check_circle, color: AppColors.success, size: 48),
+          Icon(Icons.check_circle, color: AppColors.neonGreen, size: 48),
           const SizedBox(height: 8),
           Text(
             'Disponible !',
-            style: AppTextStyles.heading2.copyWith(color: AppColors.success),
+            style: AppTextStyles.heading2.copyWith(
+              color: AppColors.neonGreen,
+              shadows: [
+                Shadow(
+                  color: AppColors.neonGreen.withValues(alpha: 0.6),
+                  blurRadius: 10,
+                ),
+              ],
+            ),
           ),
         ],
       );
@@ -68,9 +76,13 @@ class _CountdownDisplayState extends State<CountdownDisplay> {
           mainAxisSize: MainAxisSize.min,
           children: [
             _TimeUnit(value: hours, label: 'h'),
-            Text(' : ', style: AppTextStyles.countdown),
+            Text(' : ', style: AppTextStyles.countdown.copyWith(
+              color: AppColors.neonCyan,
+            )),
             _TimeUnit(value: minutes, label: 'min'),
-            Text(' : ', style: AppTextStyles.countdown),
+            Text(' : ', style: AppTextStyles.countdown.copyWith(
+              color: AppColors.neonCyan,
+            )),
             _TimeUnit(value: seconds, label: 'sec'),
           ],
         ),
@@ -92,7 +104,15 @@ class _TimeUnit extends StatelessWidget {
       children: [
         Text(
           value.toString().padLeft(2, '0'),
-          style: AppTextStyles.countdown.copyWith(color: AppColors.primary),
+          style: AppTextStyles.countdown.copyWith(
+            color: AppColors.neonCyan,
+            shadows: [
+              Shadow(
+                color: AppColors.neonCyan.withValues(alpha: 0.5),
+                blurRadius: 8,
+              ),
+            ],
+          ),
         ),
         Text(label, style: AppTextStyles.caption),
       ],

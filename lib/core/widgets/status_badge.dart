@@ -29,9 +29,16 @@ class StatusBadge extends StatelessWidget {
         vertical: compact ? 4 : 8,
       ),
       decoration: BoxDecoration(
-        color: _color.withValues(alpha: 0.15),
+        color: _color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _color, width: 1.5),
+        border: Border.all(color: _color.withValues(alpha: 0.6), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: _color.withValues(alpha: 0.3),
+            blurRadius: 8,
+            spreadRadius: -1,
+          ),
+        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -40,7 +47,15 @@ class StatusBadge extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             phase.label,
-            style: AppTextStyles.statusLabel.copyWith(color: _color),
+            style: AppTextStyles.statusLabel.copyWith(
+              color: _color,
+              shadows: [
+                Shadow(
+                  color: _color.withValues(alpha: 0.5),
+                  blurRadius: 6,
+                ),
+              ],
+            ),
           ),
         ],
       ),

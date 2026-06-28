@@ -240,6 +240,7 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
     showModalBottomSheet(
       context: ctx,
       isScrollControlled: true,
+      backgroundColor: AppColors.surfaceDark,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -258,7 +259,7 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.grey[300],
+                    color: AppColors.neonCyan.withValues(alpha: 0.3),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -268,7 +269,7 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
                 flightCount > 0
                     ? 'Debug Parser ($flightCount vols)'
                     : 'Aucun vol détecté',
-                style: AppTextStyles.heading2,
+                style: AppTextStyles.heading2.copyWith(color: Colors.white),
               ),
               const SizedBox(height: 8),
               Text(
@@ -277,37 +278,38 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
                 '${roster.totalLandings} atterrissages.\n\n'
                 'Faites une capture de ce texte et envoyez-la '
                 'pour corriger le parser.',
-                style: AppTextStyles.caption,
+                style: AppTextStyles.caption.copyWith(color: Colors.white54),
               ),
               if (debugInfo != null) ...[
                 const SizedBox(height: 12),
-                Text('Parser Debug :', style: AppTextStyles.bodyBold),
+                Text('Parser Debug :', style: AppTextStyles.bodyBold.copyWith(color: Colors.white)),
                 const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.blue[50],
+                    color: AppColors.backgroundDark,
                     borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.neonCyan.withValues(alpha: 0.2)),
                   ),
                   child: SelectableText(
                     debugInfo,
-                    style:
-                        const TextStyle(fontSize: 9, fontFamily: 'monospace'),
+                    style: const TextStyle(fontSize: 9, fontFamily: 'monospace', color: Colors.white70),
                   ),
                 ),
               ],
               const SizedBox(height: 12),
-              Text('Texte extrait du PDF :', style: AppTextStyles.bodyBold),
+              Text('Texte extrait du PDF :', style: AppTextStyles.bodyBold.copyWith(color: Colors.white)),
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.grey[100],
+                  color: AppColors.backgroundDark,
                   borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.neonCyan.withValues(alpha: 0.2)),
                 ),
                 child: SelectableText(
                   rawText,
-                  style: const TextStyle(fontSize: 9, fontFamily: 'monospace'),
+                  style: const TextStyle(fontSize: 9, fontFamily: 'monospace', color: Colors.white70),
                 ),
               ),
             ],
@@ -321,7 +323,8 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
   Widget build(BuildContext context) {
     final hasRoster = ref.read(rosterProvider) != null;
 
-    return Padding(
+    return Container(
+      color: AppColors.surfaceDark,
       padding: EdgeInsets.only(
         left: 24,
         right: 24,
@@ -335,32 +338,32 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
             width: 40,
             height: 4,
             decoration: BoxDecoration(
-              color: Colors.grey[300],
+              color: AppColors.neonCyan.withValues(alpha: 0.3),
               borderRadius: BorderRadius.circular(2),
             ),
           ),
           const SizedBox(height: 20),
-          Icon(Icons.upload_file, size: 48, color: AppColors.primary),
+          Icon(Icons.upload_file, size: 48, color: AppColors.neonCyan),
           const SizedBox(height: 12),
           Text(
             hasRoster ? 'Remplacer le roster' : 'Importer mon roster',
-            style: AppTextStyles.heading2,
+            style: AppTextStyles.heading2.copyWith(color: Colors.white),
           ),
           const SizedBox(height: 8),
           Text(
             'Sélectionnez votre fichier PDF eCrew\ndepuis vos fichiers.',
-            style: AppTextStyles.caption.copyWith(color: Colors.grey),
+            style: AppTextStyles.caption.copyWith(color: Colors.white54),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
           if (_loading)
-            const Padding(
-              padding: EdgeInsets.all(32),
+            Padding(
+              padding: const EdgeInsets.all(32),
               child: Column(
                 children: [
-                  CircularProgressIndicator(),
-                  SizedBox(height: 12),
-                  Text('Lecture du PDF en cours...'),
+                  CircularProgressIndicator(color: AppColors.neonCyan),
+                  const SizedBox(height: 12),
+                  const Text('Lecture du PDF en cours...', style: TextStyle(color: Colors.white70)),
                 ],
               ),
             )
@@ -375,22 +378,15 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
                   'Charger mon roster (PDF)',
                   style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
                 ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
               ),
             ),
             const SizedBox(height: 16),
             TextButton.icon(
               onPressed: _loadDemoRoster,
-              icon: Icon(Icons.auto_awesome, size: 16, color: Colors.grey[600]),
+              icon: Icon(Icons.auto_awesome, size: 16, color: AppColors.neonPurple),
               label: Text(
                 'Charger le roster démo',
-                style: AppTextStyles.caption.copyWith(color: Colors.grey[600]),
+                style: AppTextStyles.caption.copyWith(color: AppColors.neonPurple),
               ),
             ),
           ],
@@ -399,13 +395,13 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.red.withValues(alpha: 0.1),
+                color: AppColors.neonRed.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                border: Border.all(color: AppColors.neonRed.withValues(alpha: 0.3)),
               ),
               child: Text(
                 _error!,
-                style: AppTextStyles.caption.copyWith(color: Colors.red[700]),
+                style: AppTextStyles.caption.copyWith(color: AppColors.neonRed),
                 textAlign: TextAlign.center,
               ),
             ),
