@@ -29,6 +29,7 @@ class RosterDuty extends Equatable {
   final DateTime? checkIn;
   final DateTime? checkOut;
   final String? notes;
+  final String? activityCode;
 
   const RosterDuty({
     required this.date,
@@ -39,6 +40,7 @@ class RosterDuty extends Equatable {
     this.checkIn,
     this.checkOut,
     this.notes,
+    this.activityCode,
   });
 
   bool get isFlight => type == DutyType.flight;
@@ -46,7 +48,7 @@ class RosterDuty extends Equatable {
 
   @override
   List<Object?> get props =>
-      [date, type, flightNumber, departure, arrival, checkIn, checkOut, notes];
+      [date, type, flightNumber, departure, arrival, checkIn, checkOut, notes, activityCode];
 }
 
 class Roster extends Equatable {

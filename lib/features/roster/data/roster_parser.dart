@@ -237,11 +237,21 @@ class RosterParser {
     // Step 3: Parse the activity row - map each token to a day index.
     // Pre-process: merge split codes (PDF extraction can split "//"->"/ /"
     // and "/RH"->"/ RH", each consuming an extra day index).
+    // Only merge when raw non-skip token count exceeds day count,
+    // otherwise each token maps 1:1 to a day.
     final rawTokens = lines[activityRowIdx].trim().split(RegExp(r'\s+'));
+
+    int rawActivityCount = 0;
+    for (final t in rawTokens) {
+      if (_dayOfWeek.hasMatch(t) || _monthAbbr.containsKey(t)) continue;
+      rawActivityCount++;
+    }
+    final shouldMerge = rawActivityCount > dayDates.length;
+
     final actTokens = <String>[];
     for (int i = 0; i < rawTokens.length; i++) {
       final t = rawTokens[i];
-      if (t == '/' && i + 1 < rawTokens.length) {
+      if (shouldMerge && t == '/' && i + 1 < rawTokens.length) {
         final next = rawTokens[i + 1];
         if (next == '/') {
           actTokens.add('//');
@@ -487,6 +497,7 @@ class RosterParser {
         duties.add(RosterDuty(
           date: date,
           type: _avioDevType(upper),
+          activityCode: upper,
           notes: _avioDevLabel(upper),
           checkIn: _timeFromStr(date.year, date.month, date.day, times?.checkIn),
           checkOut: _timeFromStr(date.year, date.month, date.day, times?.checkOut),
@@ -530,6 +541,7 @@ class RosterParser {
       duties.add(RosterDuty(
         date: date,
         type: DutyType.off,
+        activityCode: upper,
         notes: upper,
       ));
     }
@@ -719,6 +731,7 @@ class RosterParser {
       duties.add(RosterDuty(
         date: DateTime(year, month, day),
         type: actType,
+        activityCode: actNotes,
         notes: actNotes,
       ));
       return duties;
@@ -943,6 +956,7 @@ class RosterParser {
         duties.add(RosterDuty(
           date: DateTime(year, month, dayNum),
           type: _codeToType(next),
+          activityCode: next,
           notes: _avioDevLabel(next),
         ));
         coveredDays.add(dayNum);

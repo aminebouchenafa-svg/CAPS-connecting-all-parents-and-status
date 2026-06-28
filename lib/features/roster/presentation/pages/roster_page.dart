@@ -828,7 +828,7 @@ class _RosterCalendar extends ConsumerWidget {
   }
 
   Widget _dutyDetailCard(RosterDuty duty) {
-    final color = _dutyColorSingle(duty.type);
+    final color = _colorForDuty(duty);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -844,7 +844,10 @@ class _RosterCalendar extends ConsumerWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(6)),
-                child: Text(duty.type.label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12)),
+                child: Text(
+                  duty.isFlight ? 'Vol' : (duty.activityCode ?? duty.type.label),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 12),
+                ),
               ),
               if (duty.flightNumber != null) ...[
                 const SizedBox(width: 8),
@@ -902,16 +905,27 @@ class _RosterCalendar extends ConsumerWidget {
 
   Color _defaultDutyColor(List<RosterDuty> duties) {
     if (duties.isEmpty) return Colors.grey;
-    return _dutyColorSingle(duties.first.type);
+    return _colorForDuty(duties.first);
   }
 
-  Color _dutyColorSingle(DutyType type) => switch (type) {
-    DutyType.flight => const Color(0xFF2980B9),
-    DutyType.standby => const Color(0xFFF39C12),
-    DutyType.rest || DutyType.off => const Color(0xFF27AE60),
-    DutyType.training || DutyType.simulator => const Color(0xFF8E44AD),
-    DutyType.deadhead => const Color(0xFFF39C12),
-  };
+  static Color _colorForDuty(RosterDuty duty) {
+    if (duty.isFlight) return const Color(0xFF2980B9);
+    final code = duty.activityCode?.toUpperCase() ?? '';
+    if (['/RH', '//', 'RH'].contains(code)) return const Color(0xFF27AE60);
+    if (['/', 'OFF', 'DO', 'JA'].contains(code)) return const Color(0xFFE74C3C);
+    if (['ING1', 'ING2', 'ING3', 'ING4', 'ING5', 'ESIM', 'INST'].contains(code)) return const Color(0xFF8E44AD);
+    if (['HS', 'SBY', 'STBY', 'STANDBY'].contains(code)) return const Color(0xFFF39C12);
+    if (['ARRT', 'DEPL'].contains(code)) return const Color(0xFFF39C12);
+    if (['ABS', 'C/O', 'REPOS', 'REST'].contains(code)) return const Color(0xFF27AE60);
+    return switch (duty.type) {
+      DutyType.flight => const Color(0xFF2980B9),
+      DutyType.standby => const Color(0xFFF39C12),
+      DutyType.rest => const Color(0xFF27AE60),
+      DutyType.off => const Color(0xFFE74C3C),
+      DutyType.training || DutyType.simulator => const Color(0xFF8E44AD),
+      DutyType.deadhead => const Color(0xFFF39C12),
+    };
+  }
 
   String _fmtTime(DateTime dt) => '${dt.hour.toString().padLeft(2, '0')}h${dt.minute.toString().padLeft(2, '0')}';
 }
@@ -1042,6 +1056,11 @@ class _HorizontalDayBlock extends StatelessWidget {
                       Icon(Icons.access_time, size: 24, color: color),
                       const SizedBox(height: 2),
                       Text('Astreinte', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
+                      if (duties.first.checkIn != null && duties.first.checkOut != null)
+                        Text(
+                          '${_fmtTime(duties.first.checkIn!)} - ${_fmtTime(duties.first.checkOut!)}',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.grey[600]),
+                        ),
                     ] else ...[
                       const SizedBox(height: 6),
                       Icon(
@@ -1144,18 +1163,16 @@ class _HorizontalDayBlock extends StatelessWidget {
       return _availableColors.values.elementAt(customColor!);
     }
     if (duties.isEmpty) return Colors.grey;
-    return switch (duties.first.type) {
-      DutyType.flight => const Color(0xFF2980B9),
-      DutyType.standby => const Color(0xFFF39C12),
-      DutyType.rest || DutyType.off => const Color(0xFF27AE60),
-      DutyType.training || DutyType.simulator => const Color(0xFF8E44AD),
-      DutyType.deadhead => const Color(0xFFF39C12),
-    };
+    return _RosterCalendar._colorForDuty(duties.first);
   }
 
   String _label() {
     if (duties.isEmpty) return 'Libre';
-    return duties.first.type.label;
+    final duty = duties.first;
+    if (duty.isFlight) return 'Vol';
+    final code = duty.activityCode;
+    if (code != null && code.isNotEmpty) return code;
+    return duty.type.label;
   }
 
   String _fmtTime(DateTime dt) => '${dt.hour.toString().padLeft(2, '0')}h${dt.minute.toString().padLeft(2, '0')}';
