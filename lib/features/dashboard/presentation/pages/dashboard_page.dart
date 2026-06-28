@@ -156,11 +156,11 @@ class _DashboardContent extends ConsumerWidget {
         children: [
           _TodayCard(status: status, roster: roster),
           const SizedBox(height: 16),
-          if (_findNextFlight(roster) != null)
+          if (_findNextFlight(roster) case final nextFlight?)
             Padding(
               padding: const EdgeInsets.only(bottom: 16),
               child: _NextFlightCard(
-                nextFlight: _findNextFlight(roster)!,
+                nextFlight: nextFlight,
               ),
             ),
           _WeekPreview(roster: roster),

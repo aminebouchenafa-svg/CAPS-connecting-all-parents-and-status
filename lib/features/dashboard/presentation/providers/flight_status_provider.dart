@@ -107,9 +107,9 @@ final rosterFlightStatusProvider = Provider<FlightStatus?>((ref) {
     final nextFlightDay = _findNextFlightDay(roster, today);
     String? notes;
     if (nextFlightDay != null) {
-      final depName = RosterParser.airportName(nextFlightDay.departure ?? '');
+      final arrName = RosterParser.airportName(nextFlightDay.arrival ?? '');
       notes = 'Prochain vol : ${nextFlightDay.flightNumber} '
-          'vers $depName le ${nextFlightDay.date.day}/${nextFlightDay.date.month}';
+          'vers $arrName le ${nextFlightDay.date.day}/${nextFlightDay.date.month}';
     }
 
     return FlightStatus(
