@@ -379,7 +379,7 @@ class RosterParser {
     // Timed days = any day with a duty that has scheduled times:
     //   flights, ESIM, ING1-5, ARRT, DEPL, INST
     // Excluded (no times): /, /RH, //, RH, OFF, DO, JA, ABS, HS, C/O
-    const _noTimeCodes = {'/', '/RH', '//', 'RH', 'OFF', 'DO', 'JA', 'ABS', 'HS', 'C/O', 'REPOS', 'REST'};
+    const _noTimeCodes = {'/', '/RH', '//', 'RH', 'OFF', 'DO', 'JA', 'ABS', 'C/O', 'REPOS', 'REST'};
     final timedDayIndices = <int>[];
     for (int di = 0; di < dayDates.length; di++) {
       final act = dayActivities[di];
@@ -959,9 +959,9 @@ class RosterParser {
     if (['ING1', 'ING2', 'ING3', 'ING4', 'ING5', 'INST'].contains(code)) {
       return DutyType.training;
     }
-    if (['SBY', 'STBY', 'STANDBY'].contains(code)) return DutyType.standby;
+    if (['SBY', 'STBY', 'STANDBY', 'HS'].contains(code)) return DutyType.standby;
     if (['ARRT', 'DEPL'].contains(code)) return DutyType.deadhead;
-    if (['ABS', 'HS', 'C/O', 'REPOS', 'REST'].contains(code)) {
+    if (['ABS', 'C/O', 'REPOS', 'REST'].contains(code)) {
       return DutyType.rest;
     }
     return DutyType.off;
@@ -978,7 +978,7 @@ class RosterParser {
       'ARRT' => 'Arrivée tardive',
       'DEPL' => 'Mission',
       'ABS' => 'Absence',
-      'HS' => 'Hors Service',
+      'HS' => 'Home Standby',
       'INST' => 'Instruction',
       'C/O' => 'Check Out',
       'SBY' || 'STBY' || 'STANDBY' => 'Standby',
