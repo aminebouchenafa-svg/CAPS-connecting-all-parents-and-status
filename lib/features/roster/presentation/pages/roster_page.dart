@@ -8,6 +8,7 @@ import '../../data/ical_export.dart';
 import '../../data/roster_parser.dart';
 import '../../data/roster_share.dart';
 import '../../domain/entities/roster_duty.dart';
+import '../../domain/ftl_rules.dart';
 import '../providers/roster_provider.dart';
 import '../widgets/roster_upload_widget.dart';
 import 'roster_day_page.dart';
@@ -370,58 +371,83 @@ class _RosterCalendar extends ConsumerWidget {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: GestureDetector(
-            onTap: () => _showTotalsAndCodes(context, ref),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              decoration: BoxDecoration(
-                color: AppColors.neonCyan.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.neonCyan.withValues(alpha: 0.3)),
-                boxShadow: [BoxShadow(color: AppColors.neonCyan.withValues(alpha: 0.1), blurRadius: 8)],
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.bar_chart, size: 16, color: AppColors.neonCyan),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Totaux & Codes',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.neonCyan,
-                      shadows: [Shadow(color: AppColors.neonCyan.withValues(alpha: 0.5), blurRadius: 4)],
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _showTotalsAndCodes(context, ref),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.neonCyan.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: AppColors.neonCyan.withValues(alpha: 0.3)),
+                      boxShadow: [BoxShadow(color: AppColors.neonCyan.withValues(alpha: 0.1), blurRadius: 8)],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.bar_chart, size: 16, color: AppColors.neonCyan),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Totaux & Codes',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.neonCyan,
+                            shadows: [Shadow(color: AppColors.neonCyan.withValues(alpha: 0.5), blurRadius: 4)],
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _showFtlCompliance(context),
+                  child: _FtlQuickStatus(roster: roster),
+                ),
+              ),
+            ],
           ),
         ),
         Expanded(
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 100),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: days.map((date) {
-                final duties = roster.dutiesForDate(date);
-                final noteKey = '${date.year}-${date.month}-${date.day}';
-                final note = notes[noteKey];
-                final dayTasks = tasks[noteKey];
-                final customColor = customColors[noteKey];
+            child: Builder(
+              builder: (context) {
+                final checker = FtlChecker(roster);
+                final allAlerts = checker.checkAll();
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: days.map((date) {
+                    final duties = roster.dutiesForDate(date);
+                    final noteKey = '${date.year}-${date.month}-${date.day}';
+                    final note = notes[noteKey];
+                    final dayTasks = tasks[noteKey];
+                    final customColor = customColors[noteKey];
+                    final dayAlerts = allAlerts.where((a) =>
+                        a.date != null &&
+                        a.date!.year == date.year &&
+                        a.date!.month == date.month &&
+                        a.date!.day == date.day).toList();
 
-                return _HorizontalDayBlock(
-                  date: date,
-                  duties: duties,
-                  note: note,
-                  tasks: dayTasks,
-                  customColor: customColor,
-                  onTap: () => _showDayDetail(context, ref, date, duties, notes, tasks, customColors),
+                    return _HorizontalDayBlock(
+                      date: date,
+                      duties: duties,
+                      note: note,
+                      tasks: dayTasks,
+                      customColor: customColor,
+                      ftlAlerts: dayAlerts,
+                      onTap: () => _showDayDetail(context, ref, date, duties, notes, tasks, customColors),
+                    );
+                  }).toList(),
                 );
-              }).toList(),
+              },
             ),
           ),
         ),
@@ -467,6 +493,308 @@ class _RosterCalendar extends ConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+
+  void _showFtlCompliance(BuildContext context) {
+    final checker = FtlChecker(roster);
+    final alerts = checker.checkAll();
+    final violations = alerts.where((a) => a.severity == FtlSeverity.violation).toList();
+    final warnings = alerts.where((a) => a.severity == FtlSeverity.warning).toList();
+    final infos = alerts.where((a) => a.severity == FtlSeverity.info).toList();
+    final rh = checker.rhSummary();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        final isDark = Theme.of(ctx).brightness == Brightness.dark;
+        final onSurface = Theme.of(ctx).colorScheme.onSurface;
+        return DraggableScrollableSheet(
+          initialChildSize: 0.8,
+          minChildSize: 0.4,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (ctx, scrollController) => Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+            child: ListView(
+              controller: scrollController,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40, height: 4,
+                    decoration: BoxDecoration(
+                      color: onSurface.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                Row(
+                  children: [
+                    Icon(Icons.shield_outlined, size: 22, color: violations.isEmpty ? AppColors.neonGreen : AppColors.neonRed),
+                    const SizedBox(width: 8),
+                    Text(
+                      'CONFORMITÉ FTL',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: isDark
+                            ? (violations.isEmpty ? AppColors.neonGreen : AppColors.neonRed)
+                            : (violations.isEmpty ? const Color(0xFF2E7D32) : const Color(0xFFC62828)),
+                        shadows: isDark ? [Shadow(color: (violations.isEmpty ? AppColors.neonGreen : AppColors.neonRed).withValues(alpha: 0.5), blurRadius: 6)] : [],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Protocole Air Algérie - SPLA',
+                  style: TextStyle(fontSize: 12, color: onSurface.withValues(alpha: 0.5)),
+                ),
+                const SizedBox(height: 16),
+
+                // Summary cards
+                Row(
+                  children: [
+                    _ftlSummaryChip(ctx, '${violations.length}', 'Violations', AppColors.neonRed),
+                    const SizedBox(width: 8),
+                    _ftlSummaryChip(ctx, '${warnings.length}', 'Alertes', AppColors.neonOrange),
+                    const SizedBox(width: 8),
+                    _ftlSummaryChip(ctx, '${rh.actual}/${rh.required}', 'RH', rh.compliant ? AppColors.neonGreen : AppColors.neonRed),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Friday+Saturday check
+                _ftlFridaySaturdayCard(ctx, alerts),
+                const SizedBox(height: 12),
+
+                // Violations
+                if (violations.isNotEmpty) ...[
+                  _ftlSectionHeader(ctx, 'Violations', Icons.error, AppColors.neonRed),
+                  const SizedBox(height: 8),
+                  ...violations.map((a) => _ftlAlertCard(ctx, a)),
+                ],
+
+                // Warnings
+                if (warnings.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  _ftlSectionHeader(ctx, 'Alertes', Icons.warning_amber, AppColors.neonOrange),
+                  const SizedBox(height: 8),
+                  ...warnings.map((a) => _ftlAlertCard(ctx, a)),
+                ],
+
+                // Infos
+                if (infos.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  _ftlSectionHeader(ctx, 'Informations', Icons.info_outline, AppColors.neonGreen),
+                  const SizedBox(height: 8),
+                  ...infos.map((a) => _ftlAlertCard(ctx, a)),
+                ],
+
+                if (violations.isEmpty && warnings.isEmpty)
+                  Container(
+                    margin: const EdgeInsets.only(top: 16),
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: AppColors.neonGreen.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.neonGreen.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(Icons.check_circle, size: 48, color: AppColors.neonGreen),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Roster conforme',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: isDark ? AppColors.neonGreen : const Color(0xFF2E7D32),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Aucune violation des règles FTL détectée',
+                          style: TextStyle(fontSize: 13, color: onSurface.withValues(alpha: 0.6)),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _ftlSummaryChip(BuildContext ctx, String value, String label, Color color) {
+    final isDark = Theme.of(ctx).brightness == Brightness.dark;
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.3)),
+          boxShadow: isDark ? [BoxShadow(color: color.withValues(alpha: 0.1), blurRadius: 6)] : [],
+        ),
+        child: Column(
+          children: [
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                color: color,
+                shadows: isDark ? [Shadow(color: color.withValues(alpha: 0.5), blurRadius: 4)] : [],
+              ),
+            ),
+            Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color.withValues(alpha: 0.8))),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _ftlSectionHeader(BuildContext ctx, String title, IconData icon, Color color) {
+    final isDark = Theme.of(ctx).brightness == Brightness.dark;
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: color),
+        const SizedBox(width: 8),
+        Text(
+          title.toUpperCase(),
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w800,
+            color: color,
+            shadows: isDark ? [Shadow(color: color.withValues(alpha: 0.5), blurRadius: 4)] : [],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _ftlAlertCard(BuildContext ctx, FtlAlert alert) {
+    final isDark = Theme.of(ctx).brightness == Brightness.dark;
+    final onSurface = Theme.of(ctx).colorScheme.onSurface;
+    final color = switch (alert.severity) {
+      FtlSeverity.violation => AppColors.neonRed,
+      FtlSeverity.warning => AppColors.neonOrange,
+      FtlSeverity.info => AppColors.neonGreen,
+    };
+    final icon = switch (alert.severity) {
+      FtlSeverity.violation => Icons.error,
+      FtlSeverity.warning => Icons.warning_amber,
+      FtlSeverity.info => Icons.check_circle,
+    };
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border(left: BorderSide(color: color, width: 4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  alert.title,
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: color),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  alert.article,
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: color),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            alert.detail,
+            style: TextStyle(fontSize: 12, color: onSurface.withValues(alpha: 0.7)),
+          ),
+          if (alert.date != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              '${alert.date!.day} ${_monthNames[alert.date!.month]}',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: onSurface.withValues(alpha: 0.4)),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _ftlFridaySaturdayCard(BuildContext ctx, List<FtlAlert> alerts) {
+    final isDark = Theme.of(ctx).brightness == Brightness.dark;
+    final onSurface = Theme.of(ctx).colorScheme.onSurface;
+    final friSatAlert = alerts.where((a) => a.article == 'Art. 40').toList();
+    final isOk = friSatAlert.isEmpty || friSatAlert.every((a) => a.severity == FtlSeverity.info);
+    final color = isOk ? AppColors.neonGreen : AppColors.neonRed;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+        boxShadow: isDark ? [BoxShadow(color: color.withValues(alpha: 0.1), blurRadius: 8)] : [],
+      ),
+      child: Row(
+        children: [
+          Icon(
+            isOk ? Icons.check_circle : Icons.cancel,
+            size: 28,
+            color: color,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Vendredi + Samedi libre',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? color : (isOk ? const Color(0xFF2E7D32) : const Color(0xFFC62828)),
+                  ),
+                ),
+                Text(
+                  isOk
+                      ? 'Au moins un week-end Ven/Sam libre ce mois'
+                      : 'Aucun week-end Ven/Sam libre trouvé (Art. 40)',
+                  style: TextStyle(fontSize: 12, color: onSurface.withValues(alpha: 0.6)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -793,6 +1121,8 @@ class _RosterCalendar extends ConsumerWidget {
                   if (duties.any((d) => d.isFlight))
                     _serviceTimesDetail(ctx, duties.where((d) => d.isFlight).toList()),
 
+                  ..._buildDayFtlAlerts(ctx, date),
+
                   const SizedBox(height: 16),
 
                   Row(
@@ -1117,6 +1447,84 @@ class _RosterCalendar extends ConsumerWidget {
     );
   }
 
+  List<Widget> _buildDayFtlAlerts(BuildContext ctx, DateTime date) {
+    final checker = FtlChecker(roster);
+    final dayAlerts = checker.alertsForDate(date);
+    if (dayAlerts.isEmpty) return [];
+
+    final isDark = Theme.of(ctx).brightness == Brightness.dark;
+    final onSurface = Theme.of(ctx).colorScheme.onSurface;
+
+    // Also show rest info
+    final restInfo = checker.minRestForDate(date);
+
+    return [
+      const SizedBox(height: 8),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: AppColors.neonBlue.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.neonBlue.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.hotel, size: 14, color: AppColors.neonBlue),
+            const SizedBox(width: 6),
+            Text(
+              'Repos min (${restInfo.location}): ${restInfo.minRest.inHours}h',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isDark ? AppColors.neonBlue : const Color(0xFF1565C0)),
+            ),
+          ],
+        ),
+      ),
+      ...dayAlerts.map((alert) {
+        final color = switch (alert.severity) {
+          FtlSeverity.violation => AppColors.neonRed,
+          FtlSeverity.warning => AppColors.neonOrange,
+          FtlSeverity.info => AppColors.neonGreen,
+        };
+        final icon = switch (alert.severity) {
+          FtlSeverity.violation => Icons.error,
+          FtlSeverity.warning => Icons.warning_amber,
+          FtlSeverity.info => Icons.check_circle,
+        };
+        return Container(
+          margin: const EdgeInsets.only(top: 6),
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(10),
+            border: Border(left: BorderSide(color: color, width: 3)),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(alert.title, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color)),
+                    Text(alert.detail, style: TextStyle(fontSize: 11, color: onSurface.withValues(alpha: 0.6))),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(alert.article, style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700, color: color)),
+              ),
+            ],
+          ),
+        );
+      }),
+    ];
+  }
+
   Widget _serviceTimesDetail(BuildContext ctx, List<RosterDuty> flights) {
     final isDark = Theme.of(ctx).brightness == Brightness.dark;
     final onSurface = Theme.of(ctx).colorScheme.onSurface;
@@ -1387,6 +1795,7 @@ class _HorizontalDayBlock extends StatelessWidget {
   final String? note;
   final List<Map<String, dynamic>>? tasks;
   final int? customColor;
+  final List<FtlAlert> ftlAlerts;
   final VoidCallback onTap;
   final VoidCallback? onLongPress;
 
@@ -1396,6 +1805,7 @@ class _HorizontalDayBlock extends StatelessWidget {
     required this.note,
     required this.tasks,
     required this.customColor,
+    this.ftlAlerts = const [],
     required this.onTap,
     this.onLongPress,
   });
@@ -1538,6 +1948,9 @@ class _HorizontalDayBlock extends StatelessWidget {
                       ),
                     ],
 
+                    if (ftlAlerts.isNotEmpty)
+                      _buildFtlIndicator(ftlAlerts, isDark),
+
                     if (tasks != null && tasks!.isNotEmpty) ...[
                       const SizedBox(height: 5),
                       ...tasks!.take(2).map((task) {
@@ -1616,6 +2029,41 @@ class _HorizontalDayBlock extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildFtlIndicator(List<FtlAlert> alerts, bool isDark) {
+    final hasViolation = alerts.any((a) => a.severity == FtlSeverity.violation);
+    final color = hasViolation ? AppColors.neonRed : AppColors.neonOrange;
+    final icon = hasViolation ? Icons.warning : Icons.info_outline;
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 3),
+          Flexible(
+            child: Text(
+              hasViolation ? 'FTL!' : 'FTL',
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                color: color,
+                shadows: isDark ? [Shadow(color: color.withValues(alpha: 0.5), blurRadius: 3)] : [],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1749,6 +2197,63 @@ class _MiniStat extends StatelessWidget {
             )),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _FtlQuickStatus extends StatelessWidget {
+  final Roster roster;
+  const _FtlQuickStatus({required this.roster});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final checker = FtlChecker(roster);
+    final alerts = checker.checkAll();
+    final violations = alerts.where((a) => a.severity == FtlSeverity.violation).length;
+    final warnings = alerts.where((a) => a.severity == FtlSeverity.warning).length;
+
+    final Color color;
+    final IconData icon;
+    final String label;
+    if (violations > 0) {
+      color = AppColors.neonRed;
+      icon = Icons.shield;
+      label = '$violations violation${violations > 1 ? 's' : ''}';
+    } else if (warnings > 0) {
+      color = AppColors.neonOrange;
+      icon = Icons.shield;
+      label = '$warnings alerte${warnings > 1 ? 's' : ''}';
+    } else {
+      color = AppColors.neonGreen;
+      icon = Icons.verified_user;
+      label = 'FTL OK';
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+        boxShadow: [BoxShadow(color: color.withValues(alpha: 0.1), blurRadius: 8)],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: color,
+              shadows: isDark ? [Shadow(color: color.withValues(alpha: 0.5), blurRadius: 4)] : [],
+            ),
+          ),
+        ],
       ),
     );
   }
