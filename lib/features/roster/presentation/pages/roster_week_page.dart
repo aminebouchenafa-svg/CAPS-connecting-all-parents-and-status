@@ -109,15 +109,15 @@ class _RosterWeekPageState extends ConsumerState<RosterWeekPage> {
     final roster = ref.watch(rosterProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundDark,
       appBar: AppBar(
-        backgroundColor: AppColors.surfaceDark,
         elevation: 0,
         title: Text(
           'Vue Semaine',
-          style: AppTextStyles.heading3.copyWith(color: Colors.white),
+          style: AppTextStyles.heading3.copyWith(
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
         ),
-        iconTheme: const IconThemeData(color: AppColors.neonCyan),
+        iconTheme: IconThemeData(color: Theme.of(context).colorScheme.primary),
       ),
       body: roster == null
           ? _buildNoRoster()
@@ -161,7 +161,7 @@ class _RosterWeekPageState extends ConsumerState<RosterWeekPage> {
           Text(
             'Aucun roster charge',
             style: AppTextStyles.heading3.copyWith(
-              color: Colors.white.withValues(alpha: 0.6),
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
             ),
           ),
         ],
@@ -222,15 +222,18 @@ class _WeekSelectorState extends State<_WeekSelector> {
         widget.currentWeekStart.add(Duration(days: offset * 7));
     final weekNum = _weekNumber(weekStart);
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      color: AppColors.surfaceDark,
+      color: Theme.of(context).colorScheme.surface,
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           IconButton(
             onPressed: widget.onPrevious,
-            icon: const Icon(Icons.chevron_left, color: AppColors.neonCyan),
+            icon: Icon(Icons.chevron_left, color: Theme.of(context).colorScheme.primary),
           ),
           Column(
             children: [
@@ -238,27 +241,22 @@ class _WeekSelectorState extends State<_WeekSelector> {
                 'Sem. $weekNum',
                 style: AppTextStyles.heading3.copyWith(
                   color: AppColors.neonCyan,
-                  shadows: [
-                    Shadow(
-                      color: AppColors.neonCyan.withValues(alpha: 0.6),
-                      blurRadius: 6,
-                    ),
-                  ],
+                  shadows: isDark
+                      ? [Shadow(color: AppColors.neonCyan.withValues(alpha: 0.6), blurRadius: 6)]
+                      : [],
                 ),
               ),
               Text(
                 '${weekStart.day} ${_monthNames[weekStart.month - 1]} - '
                 '${weekStart.add(const Duration(days: 6)).day} '
                 '${_monthNames[weekStart.add(const Duration(days: 6)).month - 1]}',
-                style: AppTextStyles.caption.copyWith(
-                  color: Colors.white.withValues(alpha: 0.6),
-                ),
+                style: AppTextStyles.caption.copyWith(color: onSurface.withValues(alpha: 0.6)),
               ),
             ],
           ),
           IconButton(
             onPressed: widget.onNext,
-            icon: const Icon(Icons.chevron_right, color: AppColors.neonCyan),
+            icon: Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.primary),
           ),
         ],
       ),
@@ -337,46 +335,34 @@ class _DayCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     final dayName = _dayNames[date.weekday - 1];
     final hasDuties = duties.isNotEmpty;
     final primaryDuty = hasDuties ? duties.first : null;
     final glowColor = primaryDuty != null
         ? _neonColorForDuty(primaryDuty)
         : AppColors.neonCyan.withValues(alpha: 0.3);
+    final cardBg = isDark ? AppColors.cardDark : Colors.white;
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: isToday
-              ? glowColor.withValues(alpha: 0.08)
-              : AppColors.cardDark,
+          color: isToday ? glowColor.withValues(alpha: 0.08) : cardBg,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isToday
-                ? glowColor.withValues(alpha: 0.4)
-                : glowColor.withValues(alpha: 0.15),
+            color: isToday ? glowColor.withValues(alpha: 0.4) : glowColor.withValues(alpha: 0.15),
           ),
           boxShadow: isToday
-              ? [
-                  BoxShadow(
-                    color: glowColor.withValues(alpha: 0.2),
-                    blurRadius: 12,
-                    spreadRadius: -2,
-                  ),
-                ]
-              : [
-                  BoxShadow(
-                    color: glowColor.withValues(alpha: 0.08),
-                    blurRadius: 8,
-                    spreadRadius: -2,
-                  ),
-                ],
+              ? [BoxShadow(color: glowColor.withValues(alpha: 0.2), blurRadius: 12, spreadRadius: -2)]
+              : isDark
+                  ? [BoxShadow(color: glowColor.withValues(alpha: 0.08), blurRadius: 8, spreadRadius: -2)]
+                  : [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 6)],
         ),
         child: Row(
           children: [
-            // Date section
             SizedBox(
               width: 56,
               child: Column(
@@ -384,80 +370,57 @@ class _DayCard extends StatelessWidget {
                   Text(
                     dayName,
                     style: AppTextStyles.caption.copyWith(
-                      color: isToday
-                          ? glowColor
-                          : Colors.white.withValues(alpha: 0.5),
+                      color: isToday ? glowColor : onSurface.withValues(alpha: 0.5),
                       fontWeight: isToday ? FontWeight.w700 : FontWeight.w400,
                     ),
                   ),
                   Text(
                     '${date.day}',
                     style: AppTextStyles.heading2.copyWith(
-                      color: isToday ? glowColor : Colors.white,
+                      color: isToday ? glowColor : onSurface,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                 ],
               ),
             ),
-
-            // Divider
             Container(
-              width: 2,
-              height: 48,
+              width: 2, height: 48,
               margin: const EdgeInsets.symmetric(horizontal: 12),
               decoration: BoxDecoration(
                 color: glowColor.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(1),
               ),
             ),
-
-            // Content
             Expanded(
               child: hasDuties
-                  ? _buildDutyContent(duties, glowColor)
-                  : Text(
-                      'Aucune activite',
-                      style: AppTextStyles.body.copyWith(
-                        color: Colors.white.withValues(alpha: 0.3),
-                      ),
-                    ),
+                  ? _buildDutyContent(context, duties, glowColor)
+                  : Text('Aucune activite', style: AppTextStyles.body.copyWith(color: onSurface.withValues(alpha: 0.3))),
             ),
-
-            // Arrow
-            Icon(
-              Icons.chevron_right,
-              color: Colors.white.withValues(alpha: 0.3),
-              size: 20,
-            ),
+            Icon(Icons.chevron_right, color: onSurface.withValues(alpha: 0.3), size: 20),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildDutyContent(List<RosterDuty> duties, Color glowColor) {
+  Widget _buildDutyContent(BuildContext context, List<RosterDuty> duties, Color glowColor) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         for (final duty in duties) ...[
           Row(
             children: [
-              // Activity badge
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: _neonColorForDuty(duty).withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: _neonColorForDuty(duty).withValues(alpha: 0.3),
-                  ),
+                  border: Border.all(color: _neonColorForDuty(duty).withValues(alpha: 0.3)),
                 ),
                 child: Text(
-                  duty.isFlight
-                      ? (duty.flightNumber ?? 'Vol')
-                      : (duty.activityCode ?? duty.type.label),
+                  duty.isFlight ? (duty.flightNumber ?? 'Vol') : (duty.activityCode ?? duty.type.label),
                   style: AppTextStyles.caption.copyWith(
                     color: _neonColorForDuty(duty),
                     fontWeight: FontWeight.w700,
@@ -465,33 +428,21 @@ class _DayCard extends StatelessWidget {
                   ),
                 ),
               ),
-
-              // Flight route
-              if (duty.isFlight &&
-                  duty.departure != null &&
-                  duty.arrival != null) ...[
+              if (duty.isFlight && duty.departure != null && duty.arrival != null) ...[
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '${RosterParser.airportName(duty.departure!)} '
-                    '→ ${RosterParser.airportName(duty.arrival!)}',
-                    style: AppTextStyles.caption.copyWith(
-                      color: Colors.white.withValues(alpha: 0.7),
-                    ),
+                    '${RosterParser.airportName(duty.departure!)} → ${RosterParser.airportName(duty.arrival!)}',
+                    style: AppTextStyles.caption.copyWith(color: onSurface.withValues(alpha: 0.7)),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
-
-              // Times
               if (duty.checkIn != null) ...[
                 const SizedBox(width: 8),
                 Text(
                   _formatTime(duty.checkIn!),
-                  style: AppTextStyles.caption.copyWith(
-                    color: Colors.white.withValues(alpha: 0.5),
-                    fontSize: 11,
-                  ),
+                  style: AppTextStyles.caption.copyWith(color: onSurface.withValues(alpha: 0.5), fontSize: 11),
                 ),
               ],
             ],
@@ -515,6 +466,8 @@ class _DayDetailModal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     final fullDayName = _fullDayNames[date.weekday - 1];
     final monthName = _monthNames[date.month - 1];
 
@@ -524,23 +477,20 @@ class _DayDetailModal extends StatelessWidget {
       maxChildSize: 0.9,
       builder: (context, scrollController) {
         return Container(
-          decoration: const BoxDecoration(
-            color: AppColors.surfaceDark,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           ),
           child: Column(
             children: [
-              // Handle
               Container(
-                width: 40,
-                height: 4,
+                width: 40, height: 4,
                 margin: const EdgeInsets.only(top: 12),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.3),
+                  color: onSurface.withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              // Header
               Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
@@ -549,43 +499,27 @@ class _DayDetailModal extends StatelessWidget {
                       fullDayName,
                       style: AppTextStyles.heading2.copyWith(
                         color: AppColors.neonCyan,
-                        shadows: [
-                          Shadow(
-                            color: AppColors.neonCyan.withValues(alpha: 0.6),
-                            blurRadius: 6,
-                          ),
-                        ],
+                        shadows: isDark ? [Shadow(color: AppColors.neonCyan.withValues(alpha: 0.6), blurRadius: 6)] : [],
                       ),
                     ),
                     Text(
                       '${date.day} $monthName ${date.year}',
-                      style: AppTextStyles.body.copyWith(
-                        color: Colors.white.withValues(alpha: 0.6),
-                      ),
+                      style: AppTextStyles.body.copyWith(color: onSurface.withValues(alpha: 0.6)),
                     ),
                   ],
                 ),
               ),
-              // Duties
               Expanded(
                 child: duties.isEmpty
                     ? Center(
-                        child: Text(
-                          'Aucune activite ce jour',
-                          style: AppTextStyles.body.copyWith(
-                            color: Colors.white.withValues(alpha: 0.4),
-                          ),
-                        ),
+                        child: Text('Aucune activite ce jour', style: AppTextStyles.body.copyWith(color: onSurface.withValues(alpha: 0.4))),
                       )
                     : ListView.separated(
                         controller: scrollController,
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         itemCount: duties.length,
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(height: 12),
-                        itemBuilder: (context, index) {
-                          return _DutyDetailCard(duty: duties[index]);
-                        },
+                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        itemBuilder: (context, index) => _DutyDetailCard(duty: duties[index]),
                       ),
               ),
             ],
@@ -603,61 +537,47 @@ class _DutyDetailCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final cardBg = isDark ? AppColors.cardDark : Colors.white;
+    final innerBg = isDark ? AppColors.backgroundDark : Colors.grey.shade50;
     final glowColor = _neonColorForDuty(duty);
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.cardDark,
+        color: cardBg,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: glowColor.withValues(alpha: 0.2)),
         boxShadow: [
-          BoxShadow(
-            color: glowColor.withValues(alpha: 0.15),
-            blurRadius: 12,
-            spreadRadius: -2,
-          ),
+          if (isDark)
+            BoxShadow(color: glowColor.withValues(alpha: 0.15), blurRadius: 12, spreadRadius: -2)
+          else
+            BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Type badge
           Row(
             children: [
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: glowColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: glowColor.withValues(alpha: 0.3),
-                  ),
+                  border: Border.all(color: glowColor.withValues(alpha: 0.3)),
                 ),
                 child: Text(
-                  duty.isFlight
-                      ? (duty.flightNumber ?? 'Vol')
-                      : (duty.activityCode ?? duty.type.label),
-                  style: AppTextStyles.bodyBold.copyWith(
-                    color: glowColor,
-                  ),
+                  duty.isFlight ? (duty.flightNumber ?? 'Vol') : (duty.activityCode ?? duty.type.label),
+                  style: AppTextStyles.bodyBold.copyWith(color: glowColor),
                 ),
               ),
               const Spacer(),
-              Text(
-                duty.type.label,
-                style: AppTextStyles.caption.copyWith(
-                  color: Colors.white.withValues(alpha: 0.5),
-                ),
-              ),
+              Text(duty.type.label, style: AppTextStyles.caption.copyWith(color: onSurface.withValues(alpha: 0.5))),
             ],
           ),
-
-          // Flight route
-          if (duty.isFlight &&
-              duty.departure != null &&
-              duty.arrival != null) ...[
+          if (duty.isFlight && duty.departure != null && duty.arrival != null) ...[
             const SizedBox(height: 16),
             Row(
               children: [
@@ -665,117 +585,58 @@ class _DutyDetailCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        duty.departure!,
-                        style: AppTextStyles.heading3.copyWith(
-                          color: Colors.white,
-                        ),
-                      ),
-                      Text(
-                        RosterParser.airportName(duty.departure!),
-                        style: AppTextStyles.caption.copyWith(
-                          color: Colors.white.withValues(alpha: 0.6),
-                        ),
-                      ),
+                      Text(duty.departure!, style: AppTextStyles.heading3.copyWith(color: onSurface)),
+                      Text(RosterParser.airportName(duty.departure!), style: AppTextStyles.caption.copyWith(color: onSurface.withValues(alpha: 0.6))),
                     ],
                   ),
                 ),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Icon(
-                    Icons.arrow_forward,
-                    color: glowColor.withValues(alpha: 0.6),
-                  ),
+                  child: Icon(Icons.arrow_forward, color: glowColor.withValues(alpha: 0.6)),
                 ),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text(
-                        duty.arrival!,
-                        style: AppTextStyles.heading3.copyWith(
-                          color: Colors.white,
-                        ),
-                      ),
-                      Text(
-                        RosterParser.airportName(duty.arrival!),
-                        style: AppTextStyles.caption.copyWith(
-                          color: Colors.white.withValues(alpha: 0.6),
-                        ),
-                      ),
+                      Text(duty.arrival!, style: AppTextStyles.heading3.copyWith(color: onSurface)),
+                      Text(RosterParser.airportName(duty.arrival!), style: AppTextStyles.caption.copyWith(color: onSurface.withValues(alpha: 0.6))),
                     ],
                   ),
                 ),
               ],
             ),
           ],
-
-          // Times
           if (duty.checkIn != null || duty.checkOut != null) ...[
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.backgroundDark,
-                borderRadius: BorderRadius.circular(8),
-              ),
+              decoration: BoxDecoration(color: innerBg, borderRadius: BorderRadius.circular(8)),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   if (duty.checkIn != null)
                     Column(
                       children: [
-                        Text(
-                          'Check-in',
-                          style: AppTextStyles.caption.copyWith(
-                            color: Colors.white.withValues(alpha: 0.5),
-                          ),
-                        ),
-                        Text(
-                          _formatTime(duty.checkIn!),
-                          style: AppTextStyles.bodyBold.copyWith(
-                            color: Colors.white,
-                          ),
-                        ),
+                        Text('Départ', style: AppTextStyles.caption.copyWith(color: onSurface.withValues(alpha: 0.5))),
+                        Text(_formatTime(duty.checkIn!), style: AppTextStyles.bodyBold.copyWith(color: onSurface)),
                       ],
                     ),
                   if (duty.checkIn != null && duty.checkOut != null)
-                    Container(
-                      width: 1,
-                      height: 30,
-                      color: Colors.white.withValues(alpha: 0.1),
-                    ),
+                    Container(width: 1, height: 30, color: onSurface.withValues(alpha: 0.1)),
                   if (duty.checkOut != null)
                     Column(
                       children: [
-                        Text(
-                          'Check-out',
-                          style: AppTextStyles.caption.copyWith(
-                            color: Colors.white.withValues(alpha: 0.5),
-                          ),
-                        ),
-                        Text(
-                          _formatTime(duty.checkOut!),
-                          style: AppTextStyles.bodyBold.copyWith(
-                            color: Colors.white,
-                          ),
-                        ),
+                        Text('Arrivée', style: AppTextStyles.caption.copyWith(color: onSurface.withValues(alpha: 0.5))),
+                        Text(_formatTime(duty.checkOut!), style: AppTextStyles.bodyBold.copyWith(color: onSurface)),
                       ],
                     ),
                 ],
               ),
             ),
           ],
-
-          // Notes
           if (duty.notes != null && duty.notes!.isNotEmpty) ...[
             const SizedBox(height: 12),
-            Text(
-              duty.notes!,
-              style: AppTextStyles.caption.copyWith(
-                color: Colors.white.withValues(alpha: 0.5),
-              ),
-            ),
+            Text(duty.notes!, style: AppTextStyles.caption.copyWith(color: onSurface.withValues(alpha: 0.5))),
           ],
         ],
       ),

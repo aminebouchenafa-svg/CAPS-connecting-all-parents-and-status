@@ -16,27 +16,29 @@ class RosterStatsPage extends ConsumerWidget {
 
     if (roster == null) {
       return Scaffold(
-        backgroundColor: AppColors.backgroundDark,
         appBar: AppBar(
-          title: Text('Statistiques', style: AppTextStyles.heading2.copyWith(color: Colors.white)),
-          backgroundColor: AppColors.surfaceDark,
-          iconTheme: const IconThemeData(color: AppColors.neonCyan),
+          title: Text('Statistiques', style: AppTextStyles.heading2.copyWith(
+            color: Theme.of(context).colorScheme.onSurface,
+          )),
+          iconTheme: IconThemeData(color: Theme.of(context).colorScheme.primary),
         ),
         body: Center(
           child: Text(
             'Aucun roster chargé',
-            style: AppTextStyles.body.copyWith(color: Colors.white54),
+            style: AppTextStyles.body.copyWith(
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+            ),
           ),
         ),
       );
     }
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundDark,
       appBar: AppBar(
-        title: Text('Statistiques', style: AppTextStyles.heading2.copyWith(color: Colors.white)),
-        backgroundColor: AppColors.surfaceDark,
-        iconTheme: const IconThemeData(color: AppColors.neonCyan),
+        title: Text('Statistiques', style: AppTextStyles.heading2.copyWith(
+          color: Theme.of(context).colorScheme.onSurface,
+        )),
+        iconTheme: IconThemeData(color: Theme.of(context).colorScheme.primary),
         elevation: 0,
       ),
       body: SingleChildScrollView(
@@ -44,21 +46,21 @@ class RosterStatsPage extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildHeader(roster),
+            _buildHeader(context, roster),
             const SizedBox(height: 20),
-            _buildSummaryGrid(roster),
+            _buildSummaryGrid(context, roster),
             const SizedBox(height: 24),
-            _buildSectionTitle('Répartition des activités'),
+            _buildSectionTitle(context, 'Répartition des activités'),
             const SizedBox(height: 12),
-            _buildActivityBreakdown(roster),
+            _buildActivityBreakdown(context, roster),
             const SizedBox(height: 24),
-            _buildSectionTitle('Top Destinations'),
+            _buildSectionTitle(context, 'Top Destinations'),
             const SizedBox(height: 12),
-            _buildDestinationStats(roster),
+            _buildDestinationStats(context, roster),
             const SizedBox(height: 24),
-            _buildSectionTitle('Aperçu mensuel'),
+            _buildSectionTitle(context, 'Aperçu mensuel'),
             const SizedBox(height: 12),
-            _buildMonthlyOverview(roster),
+            _buildMonthlyOverview(context, roster),
             const SizedBox(height: 32),
           ],
         ),
@@ -66,20 +68,27 @@ class RosterStatsPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildHeader(Roster roster) {
+  Widget _buildHeader(BuildContext context, Roster roster) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     final startStr = _formatDate(roster.periodStart);
     final endStr = _formatDate(roster.periodEnd);
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surfaceDark,
+        color: isDark ? AppColors.surfaceDark : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.neonCyan.withValues(alpha: 0.2)),
+        border: Border.all(
+          color: isDark ? AppColors.neonCyan.withValues(alpha: 0.2) : Colors.grey.withValues(alpha: 0.2),
+        ),
+        boxShadow: isDark
+            ? []
+            : [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8)],
       ),
       child: Row(
         children: [
-          const Icon(Icons.person, color: AppColors.neonCyan, size: 28),
+          Icon(Icons.person, color: Theme.of(context).colorScheme.primary, size: 28),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -87,12 +96,14 @@ class RosterStatsPage extends ConsumerWidget {
               children: [
                 Text(
                   roster.pilotName,
-                  style: AppTextStyles.heading3.copyWith(color: Colors.white),
+                  style: AppTextStyles.heading3.copyWith(color: onSurface),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   '$startStr → $endStr  •  ${roster.aircraft}  •  ${roster.base}',
-                  style: AppTextStyles.caption.copyWith(color: Colors.white54),
+                  style: AppTextStyles.caption.copyWith(
+                    color: onSurface.withValues(alpha: 0.5),
+                  ),
                 ),
               ],
             ),
@@ -102,7 +113,7 @@ class RosterStatsPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildSummaryGrid(Roster roster) {
+  Widget _buildSummaryGrid(BuildContext context, Roster roster) {
     final cards = [
       _StatCardData(
         label: 'Block Hours',
@@ -137,23 +148,32 @@ class RosterStatsPage extends ConsumerWidget {
       mainAxisSpacing: 12,
       crossAxisSpacing: 12,
       childAspectRatio: 1.5,
-      children: cards.map((card) => _buildStatCard(card)).toList(),
+      children: cards.map((card) => _buildStatCard(context, card)).toList(),
     );
   }
 
-  Widget _buildStatCard(_StatCardData data) {
+  Widget _buildStatCard(BuildContext context, _StatCardData data) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? AppColors.cardDark : Colors.white;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A2235),
+        color: cardBg,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: data.color.withValues(alpha: 0.2)),
         boxShadow: [
-          BoxShadow(
-            color: data.color.withValues(alpha: 0.15),
-            blurRadius: 12,
-            spreadRadius: -2,
-          ),
+          if (isDark)
+            BoxShadow(
+              color: data.color.withValues(alpha: 0.15),
+              blurRadius: 12,
+              spreadRadius: -2,
+            )
+          else
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 8,
+            ),
         ],
       ),
       child: Column(
@@ -174,28 +194,36 @@ class RosterStatsPage extends ConsumerWidget {
           const SizedBox(height: 2),
           Text(
             data.label,
-            style: AppTextStyles.caption.copyWith(color: Colors.white54),
+            style: AppTextStyles.caption.copyWith(
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSectionTitle(String title) {
+  Widget _buildSectionTitle(BuildContext context, String title) {
     return Text(
       title,
-      style: AppTextStyles.heading3.copyWith(color: Colors.white),
+      style: AppTextStyles.heading3.copyWith(
+        color: Theme.of(context).colorScheme.onSurface,
+      ),
     );
   }
 
-  Widget _buildActivityBreakdown(Roster roster) {
+  Widget _buildActivityBreakdown(BuildContext context, Roster roster) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? AppColors.cardDark : Colors.white;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+
     final counts = <DutyType, int>{};
     for (final duty in roster.duties) {
       counts[duty.type] = (counts[duty.type] ?? 0) + 1;
     }
 
     if (counts.isEmpty) {
-      return _buildEmptyCard('Aucune activité');
+      return _buildEmptyCard(context, 'Aucune activité');
     }
 
     final sorted = counts.entries.toList()
@@ -206,9 +234,14 @@ class RosterStatsPage extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A2235),
+        color: cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.neonCyan.withValues(alpha: 0.1)),
+        border: Border.all(
+          color: isDark ? AppColors.neonCyan.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.15),
+        ),
+        boxShadow: isDark
+            ? []
+            : [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8)],
       ),
       child: Column(
         children: sorted.map((entry) {
@@ -230,7 +263,7 @@ class RosterStatsPage extends ConsumerWidget {
                     Text(
                       '${entry.value}',
                       style: AppTextStyles.caption.copyWith(
-                        color: Colors.white,
+                        color: onSurface,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -245,7 +278,9 @@ class RosterStatsPage extends ConsumerWidget {
                           height: 8,
                           width: constraints.maxWidth,
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.05),
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.05)
+                                : Colors.grey.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(4),
                           ),
                         ),
@@ -260,13 +295,13 @@ class RosterStatsPage extends ConsumerWidget {
                                 color.withValues(alpha: 0.6),
                               ],
                             ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: color.withValues(alpha: 0.4),
-                                blurRadius: 6,
-                                spreadRadius: -1,
-                              ),
-                            ],
+                            boxShadow: isDark
+                                ? [BoxShadow(
+                                    color: color.withValues(alpha: 0.4),
+                                    blurRadius: 6,
+                                    spreadRadius: -1,
+                                  )]
+                                : [],
                           ),
                         ),
                       ],
@@ -281,7 +316,10 @@ class RosterStatsPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildDestinationStats(Roster roster) {
+  Widget _buildDestinationStats(BuildContext context, Roster roster) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? AppColors.cardDark : Colors.white;
+
     final destinationCounts = <String, int>{};
 
     for (final duty in roster.duties) {
@@ -296,7 +334,7 @@ class RosterStatsPage extends ConsumerWidget {
     }
 
     if (destinationCounts.isEmpty) {
-      return _buildEmptyCard('Aucune destination');
+      return _buildEmptyCard(context, 'Aucune destination');
     }
 
     final sorted = destinationCounts.entries.toList()
@@ -321,9 +359,14 @@ class RosterStatsPage extends ConsumerWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A2235),
+        color: cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.neonMagenta.withValues(alpha: 0.1)),
+        border: Border.all(
+          color: isDark ? AppColors.neonMagenta.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.15),
+        ),
+        boxShadow: isDark
+            ? []
+            : [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8)],
       ),
       child: Column(
         children: List.generate(topDestinations.length, (index) {
@@ -343,7 +386,9 @@ class RosterStatsPage extends ConsumerWidget {
                     Expanded(
                       child: Text(
                         '${entry.key} • $airportFullName',
-                        style: AppTextStyles.caption.copyWith(color: Colors.white70),
+                        style: AppTextStyles.caption.copyWith(
+                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.7),
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -366,7 +411,9 @@ class RosterStatsPage extends ConsumerWidget {
                           height: 6,
                           width: constraints.maxWidth,
                           decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.05),
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.05)
+                                : Colors.grey.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(3),
                           ),
                         ),
@@ -376,13 +423,13 @@ class RosterStatsPage extends ConsumerWidget {
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(3),
                             color: color,
-                            boxShadow: [
-                              BoxShadow(
-                                color: color.withValues(alpha: 0.4),
-                                blurRadius: 4,
-                                spreadRadius: -1,
-                              ),
-                            ],
+                            boxShadow: isDark
+                                ? [BoxShadow(
+                                    color: color.withValues(alpha: 0.4),
+                                    blurRadius: 4,
+                                    spreadRadius: -1,
+                                  )]
+                                : [],
                           ),
                         ),
                       ],
@@ -397,19 +444,27 @@ class RosterStatsPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildMonthlyOverview(Roster roster) {
+  Widget _buildMonthlyOverview(BuildContext context, Roster roster) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? AppColors.cardDark : Colors.white;
+
     final stats = roster.allStats;
 
     if (stats.isEmpty) {
-      return _buildEmptyCard('Aucune statistique');
+      return _buildEmptyCard(context, 'Aucune statistique');
     }
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A2235),
+        color: cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.neonPurple.withValues(alpha: 0.1)),
+        border: Border.all(
+          color: isDark ? AppColors.neonPurple.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.15),
+        ),
+        boxShadow: isDark
+            ? []
+            : [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8)],
       ),
       child: Column(
         children: stats.entries.map((entry) {
@@ -421,7 +476,9 @@ class RosterStatsPage extends ConsumerWidget {
                 Expanded(
                   child: Text(
                     entry.key,
-                    style: AppTextStyles.caption.copyWith(color: Colors.white54),
+                    style: AppTextStyles.caption.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+                    ),
                   ),
                 ),
                 Container(
@@ -449,18 +506,24 @@ class RosterStatsPage extends ConsumerWidget {
     );
   }
 
-  Widget _buildEmptyCard(String message) {
+  Widget _buildEmptyCard(BuildContext context, String message) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A2235),
+        color: isDark ? AppColors.cardDark : Colors.white,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
+        border: Border.all(
+          color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.withValues(alpha: 0.15),
+        ),
       ),
       child: Center(
         child: Text(
           message,
-          style: AppTextStyles.caption.copyWith(color: Colors.white38),
+          style: AppTextStyles.caption.copyWith(
+            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
+          ),
         ),
       ),
     );

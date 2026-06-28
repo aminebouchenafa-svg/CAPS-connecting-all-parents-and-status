@@ -13,7 +13,6 @@ class WelcomePage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      backgroundColor: AppColors.backgroundDark,
       body: SafeArea(
         child: PageView(
           children: [
@@ -91,6 +90,12 @@ class _WelcomeSlide extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final cardBg = isDark ? AppColors.cardDark : Colors.white;
+    final subtextColor = isDark ? Colors.white70 : Colors.black54;
+    final hintColor = isDark ? AppColors.neonCyan.withValues(alpha: 0.4) : Colors.grey;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
       child: Column(
@@ -102,9 +107,9 @@ class _WelcomeSlide extends StatelessWidget {
               shape: BoxShape.circle,
               color: iconColor.withValues(alpha: 0.1),
               border: Border.all(color: iconColor.withValues(alpha: 0.3)),
-              boxShadow: [
-                BoxShadow(color: iconColor.withValues(alpha: 0.3), blurRadius: 20, spreadRadius: -4),
-              ],
+              boxShadow: isDark
+                  ? [BoxShadow(color: iconColor.withValues(alpha: 0.3), blurRadius: 20, spreadRadius: -4)]
+                  : [],
             ),
             child: Icon(icon, size: 56, color: iconColor),
           ),
@@ -112,8 +117,8 @@ class _WelcomeSlide extends StatelessWidget {
           Text(
             title,
             style: AppTextStyles.heading1.copyWith(
-              color: Colors.white,
-              shadows: [Shadow(color: AppColors.neonCyan.withValues(alpha: 0.4), blurRadius: 8)],
+              color: onSurface,
+              shadows: isDark ? [Shadow(color: AppColors.neonCyan.withValues(alpha: 0.4), blurRadius: 8)] : [],
             ),
             textAlign: TextAlign.center,
           ),
@@ -122,7 +127,7 @@ class _WelcomeSlide extends StatelessWidget {
             subtitle,
             style: AppTextStyles.bodyBold.copyWith(
               color: AppColors.neonMagenta,
-              shadows: [Shadow(color: AppColors.neonMagenta.withValues(alpha: 0.5), blurRadius: 6)],
+              shadows: isDark ? [Shadow(color: AppColors.neonMagenta.withValues(alpha: 0.5), blurRadius: 6)] : [],
             ),
             textAlign: TextAlign.center,
           ),
@@ -131,16 +136,21 @@ class _WelcomeSlide extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.cardDark,
+                color: cardBg,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.neonCyan.withValues(alpha: 0.1)),
+                border: Border.all(
+                  color: isDark ? AppColors.neonCyan.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.2),
+                ),
+                boxShadow: isDark
+                    ? []
+                    : [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8)],
               ),
               child: SingleChildScrollView(
                 child: Text(
                   description,
                   style: AppTextStyles.body.copyWith(
                     height: 1.6,
-                    color: Colors.white70,
+                    color: subtextColor,
                   ),
                   textAlign: TextAlign.left,
                 ),
@@ -151,14 +161,14 @@ class _WelcomeSlide extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.arrow_back_ios, size: 12, color: AppColors.neonCyan.withValues(alpha: 0.4)),
+              Icon(Icons.arrow_back_ios, size: 12, color: hintColor),
               const SizedBox(width: 4),
               Text(
                 'Glissez pour continuer',
-                style: AppTextStyles.caption.copyWith(color: AppColors.neonCyan.withValues(alpha: 0.4)),
+                style: AppTextStyles.caption.copyWith(color: hintColor),
               ),
               const SizedBox(width: 4),
-              Icon(Icons.arrow_forward_ios, size: 12, color: AppColors.neonCyan.withValues(alpha: 0.4)),
+              Icon(Icons.arrow_forward_ios, size: 12, color: hintColor),
             ],
           ),
           const SizedBox(height: 8),
@@ -175,6 +185,11 @@ class _LastSlide extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final cardBg = isDark ? AppColors.cardDark : Colors.white;
+    final subtextColor = isDark ? Colors.white70 : Colors.black54;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
       child: Column(
@@ -186,9 +201,9 @@ class _LastSlide extends StatelessWidget {
               shape: BoxShape.circle,
               color: AppColors.neonGreen.withValues(alpha: 0.1),
               border: Border.all(color: AppColors.neonGreen.withValues(alpha: 0.3)),
-              boxShadow: [
-                BoxShadow(color: AppColors.neonGreen.withValues(alpha: 0.3), blurRadius: 20, spreadRadius: -4),
-              ],
+              boxShadow: isDark
+                  ? [BoxShadow(color: AppColors.neonGreen.withValues(alpha: 0.3), blurRadius: 20, spreadRadius: -4)]
+                  : [],
             ),
             child: Icon(Icons.calendar_month, size: 56, color: AppColors.neonGreen),
           ),
@@ -196,8 +211,8 @@ class _LastSlide extends StatelessWidget {
           Text(
             'Calendrier familial',
             style: AppTextStyles.heading1.copyWith(
-              color: Colors.white,
-              shadows: [Shadow(color: AppColors.neonGreen.withValues(alpha: 0.4), blurRadius: 8)],
+              color: onSurface,
+              shadows: isDark ? [Shadow(color: AppColors.neonGreen.withValues(alpha: 0.4), blurRadius: 8)] : [],
             ),
             textAlign: TextAlign.center,
           ),
@@ -206,7 +221,7 @@ class _LastSlide extends StatelessWidget {
             'Toute la famille sur la même page',
             style: AppTextStyles.bodyBold.copyWith(
               color: AppColors.neonMagenta,
-              shadows: [Shadow(color: AppColors.neonMagenta.withValues(alpha: 0.5), blurRadius: 6)],
+              shadows: isDark ? [Shadow(color: AppColors.neonMagenta.withValues(alpha: 0.5), blurRadius: 6)] : [],
             ),
             textAlign: TextAlign.center,
           ),
@@ -215,9 +230,14 @@ class _LastSlide extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.cardDark,
+                color: cardBg,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.neonGreen.withValues(alpha: 0.1)),
+                border: Border.all(
+                  color: isDark ? AppColors.neonGreen.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.2),
+                ),
+                boxShadow: isDark
+                    ? []
+                    : [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 8)],
               ),
               child: SingleChildScrollView(
                 child: Text(
@@ -232,7 +252,7 @@ class _LastSlide extends StatelessWidget {
                   'même quand Amine est en vol.',
                   style: AppTextStyles.body.copyWith(
                     height: 1.6,
-                    color: Colors.white70,
+                    color: subtextColor,
                   ),
                   textAlign: TextAlign.left,
                 ),
@@ -242,26 +262,13 @@ class _LastSlide extends StatelessWidget {
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(color: AppColors.neonCyan.withValues(alpha: 0.3), blurRadius: 16, spreadRadius: -4),
-                ],
-              ),
-              child: ElevatedButton.icon(
-                onPressed: onStart,
-                icon: const Icon(Icons.rocket_launch),
-                label: const Text('C\'est parti !', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: AppColors.cardDark,
-                  foregroundColor: AppColors.neonCyan,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    side: BorderSide(color: AppColors.neonCyan.withValues(alpha: 0.5)),
-                  ),
-                ),
+            child: ElevatedButton.icon(
+              onPressed: onStart,
+              icon: const Icon(Icons.rocket_launch),
+              label: const Text('C\'est parti !', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               ),
             ),
           ),

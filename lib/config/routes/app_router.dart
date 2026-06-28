@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../core/theme/theme_provider.dart';
 import '../../features/calendar/presentation/pages/calendar_page.dart';
 import '../../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../../features/onboarding/presentation/pages/welcome_page.dart';
@@ -116,13 +117,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   );
 });
 
-class _MainShell extends StatelessWidget {
+class _MainShell extends ConsumerWidget {
   final Widget child;
 
   const _MainShell({required this.child});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDark = ref.watch(isDarkModeProvider);
+
     return Scaffold(
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 300),
@@ -131,28 +134,28 @@ class _MainShell extends StatelessWidget {
       bottomNavigationBar: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Neon glow top border
-          Container(
-            height: 1,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  AppColors.neonCyan.withValues(alpha: 0.0),
-                  AppColors.neonCyan.withValues(alpha: 0.5),
-                  AppColors.neonMagenta.withValues(alpha: 0.5),
-                  AppColors.neonMagenta.withValues(alpha: 0.0),
+          if (isDark)
+            Container(
+              height: 1,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    AppColors.neonCyan.withValues(alpha: 0.0),
+                    AppColors.neonCyan.withValues(alpha: 0.5),
+                    AppColors.neonMagenta.withValues(alpha: 0.5),
+                    AppColors.neonMagenta.withValues(alpha: 0.0),
+                  ],
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.neonCyan.withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    spreadRadius: 0,
+                    offset: const Offset(0, -2),
+                  ),
                 ],
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.neonCyan.withValues(alpha: 0.3),
-                  blurRadius: 8,
-                  spreadRadius: 0,
-                  offset: const Offset(0, -2),
-                ),
-              ],
             ),
-          ),
           NavigationBar(
             selectedIndex: _currentIndex(context),
             onDestinationSelected: (index) => _onTap(context, index),

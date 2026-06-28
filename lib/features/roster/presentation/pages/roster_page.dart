@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/theme/theme_provider.dart';
 import '../../data/ical_export.dart';
 import '../../data/roster_parser.dart';
 import '../../data/roster_share.dart';
@@ -42,17 +43,28 @@ class RosterPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final roster = ref.watch(rosterProvider);
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
       appBar: AppBar(
         title: Text(
           'Mon Roster',
           style: TextStyle(
-            color: AppColors.neonCyan,
-            shadows: [Shadow(color: AppColors.neonCyan.withValues(alpha: 0.5), blurRadius: 8)],
+            color: isDark ? AppColors.neonCyan : Theme.of(context).colorScheme.onSurface,
+            shadows: isDark ? [Shadow(color: AppColors.neonCyan.withValues(alpha: 0.5), blurRadius: 8)] : [],
           ),
         ),
-        backgroundColor: AppColors.backgroundDark,
         actions: [
+          IconButton(
+            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+            tooltip: isDark ? 'Mode Clair' : 'Mode Sombre',
+            color: isDark ? AppColors.neonYellow : Colors.blueGrey,
+            onPressed: () {
+              final current = ref.read(themeModeProvider);
+              ref.read(themeModeProvider.notifier).state =
+                  current == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+            },
+          ),
           if (roster != null) ...[
             IconButton(
               icon: const Icon(Icons.today),
@@ -82,8 +94,8 @@ class RosterPage extends ConsumerWidget {
               ),
             ),
             PopupMenuButton<String>(
-              icon: Icon(Icons.more_vert, color: AppColors.neonCyan),
-              color: AppColors.surfaceDark,
+              icon: Icon(Icons.more_vert, color: isDark ? AppColors.neonCyan : Theme.of(context).colorScheme.primary),
+              color: isDark ? AppColors.surfaceDark : Colors.white,
               onSelected: (value) {
                 switch (value) {
                   case 'export':
@@ -142,22 +154,23 @@ class RosterPage extends ConsumerWidget {
           ],
         ],
       ),
-      backgroundColor: AppColors.backgroundDark,
       body: roster == null
           ? const _EmptyRoster()
           : _RosterCalendar(roster: roster),
       floatingActionButton: Container(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(color: AppColors.neonCyan.withValues(alpha: 0.4), blurRadius: 16, spreadRadius: -2),
-          ],
+          boxShadow: isDark
+              ? [BoxShadow(color: AppColors.neonCyan.withValues(alpha: 0.4), blurRadius: 16, spreadRadius: -2)]
+              : [BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 8)],
         ),
         child: FloatingActionButton(
           onPressed: () => _showUploadSheet(context),
-          backgroundColor: AppColors.cardDark,
-          foregroundColor: AppColors.neonCyan,
-          shape: CircleBorder(side: BorderSide(color: AppColors.neonCyan.withValues(alpha: 0.5))),
+          backgroundColor: isDark ? AppColors.cardDark : Theme.of(context).colorScheme.primary,
+          foregroundColor: isDark ? AppColors.neonCyan : Colors.white,
+          shape: isDark
+              ? CircleBorder(side: BorderSide(color: AppColors.neonCyan.withValues(alpha: 0.5)))
+              : const CircleBorder(),
           child: const Icon(Icons.upload_file),
         ),
       ),
@@ -168,7 +181,6 @@ class RosterPage extends ConsumerWidget {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.surfaceDark,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -180,7 +192,6 @@ class RosterPage extends ConsumerWidget {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surfaceDark,
         title: Text('Effacer le roster ?', style: TextStyle(color: AppColors.neonRed)),
         content: const Text('Le roster actuel sera supprimé.'),
         actions: [
@@ -206,7 +217,6 @@ class RosterPage extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surfaceDark,
         title: Row(
           children: [
             Icon(Icons.calendar_today, color: AppColors.neonCyan),
@@ -251,7 +261,6 @@ class RosterPage extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surfaceDark,
         title: Row(
           children: [
             Icon(Icons.share, color: AppColors.neonMagenta),
@@ -294,6 +303,7 @@ class _EmptyRoster extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -304,13 +314,13 @@ class _EmptyRoster extends StatelessWidget {
             const SizedBox(height: 16),
             Text(
               'Aucun roster chargé',
-              style: AppTextStyles.heading2.copyWith(color: Colors.white),
+              style: AppTextStyles.heading2.copyWith(color: onSurface),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
               'Uploadez votre planning eCrew (PDF) pour voir vos rotations.',
-              style: AppTextStyles.body.copyWith(color: Colors.white54),
+              style: AppTextStyles.body.copyWith(color: onSurface.withValues(alpha: 0.5)),
               textAlign: TextAlign.center,
             ),
           ],
@@ -343,7 +353,7 @@ class _RosterCalendar extends ConsumerWidget {
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-          child: _buildHeader(),
+          child: _buildHeader(context),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
@@ -419,7 +429,8 @@ class _RosterCalendar extends ConsumerWidget {
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(BuildContext context) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     return Row(
       children: [
         Expanded(
@@ -428,11 +439,11 @@ class _RosterCalendar extends ConsumerWidget {
             children: [
               Text(
                 roster.pilotName.isNotEmpty ? roster.pilotName : 'Pilote',
-                style: AppTextStyles.bodyBold.copyWith(color: Colors.white),
+                style: AppTextStyles.bodyBold.copyWith(color: onSurface),
               ),
               Text(
                 '${roster.aircraft} • Base ${roster.base}',
-                style: AppTextStyles.caption.copyWith(color: Colors.white54),
+                style: AppTextStyles.caption.copyWith(color: onSurface.withValues(alpha: 0.5)),
               ),
             ],
           ),
@@ -463,7 +474,6 @@ class _RosterCalendar extends ConsumerWidget {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.surfaceDark,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -666,7 +676,6 @@ class _RosterCalendar extends ConsumerWidget {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: AppColors.surfaceDark,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -1261,6 +1270,8 @@ class _HorizontalDayBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     final color = _resolveColor();
     final isToday = _isToday();
     final dayName = _dayNamesFull[date.weekday - 1].substring(0, 3);
@@ -1274,7 +1285,7 @@ class _HorizontalDayBlock extends StatelessWidget {
         width: 140,
         margin: const EdgeInsets.only(right: 10),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.06),
+          color: isDark ? color.withValues(alpha: 0.06) : Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isToday ? color : color.withValues(alpha: 0.3),
@@ -1282,7 +1293,9 @@ class _HorizontalDayBlock extends StatelessWidget {
           ),
           boxShadow: isToday
               ? [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 16, spreadRadius: -2)]
-              : [BoxShadow(color: color.withValues(alpha: 0.08), blurRadius: 8)],
+              : isDark
+                  ? [BoxShadow(color: color.withValues(alpha: 0.08), blurRadius: 8)]
+                  : [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8)],
         ),
         child: Column(
           children: [
@@ -1301,7 +1314,7 @@ class _HorizontalDayBlock extends StatelessWidget {
                       fontSize: 26,
                       fontWeight: FontWeight.w900,
                       color: color,
-                      shadows: [Shadow(color: color.withValues(alpha: 0.6), blurRadius: 6)],
+                      shadows: isDark ? [Shadow(color: color.withValues(alpha: 0.6), blurRadius: 6)] : [],
                     ),
                   ),
                   Text(
@@ -1331,7 +1344,7 @@ class _HorizontalDayBlock extends StatelessWidget {
                           color: color,
                           fontWeight: FontWeight.w700,
                           fontSize: 13,
-                          shadows: [Shadow(color: color.withValues(alpha: 0.5), blurRadius: 4)],
+                          shadows: isDark ? [Shadow(color: color.withValues(alpha: 0.5), blurRadius: 4)] : [],
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -1353,7 +1366,7 @@ class _HorizontalDayBlock extends StatelessWidget {
                               children: [
                                 Text(
                                   flight.departure ?? '',
-                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Colors.white60),
+                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: onSurface.withValues(alpha: 0.6)),
                                 ),
                                 Padding(
                                   padding: const EdgeInsets.symmetric(horizontal: 3),
@@ -1368,7 +1381,7 @@ class _HorizontalDayBlock extends StatelessWidget {
                             if (flight.checkIn != null && flight.checkOut != null)
                               Text(
                                 '${_fmtTime(flight.checkIn!)} - ${_fmtTime(flight.checkOut!)}',
-                                style: TextStyle(fontSize: 10, color: Colors.white38),
+                                style: TextStyle(fontSize: 10, color: onSurface.withValues(alpha: 0.4)),
                               ),
                           ],
                         ),
@@ -1381,7 +1394,7 @@ class _HorizontalDayBlock extends StatelessWidget {
                       if (duties.first.checkIn != null && duties.first.checkOut != null)
                         Text(
                           '${_fmtTime(duties.first.checkIn!)} - ${_fmtTime(duties.first.checkOut!)}',
-                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: Colors.white38),
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: onSurface.withValues(alpha: 0.4)),
                         ),
                     ] else ...[
                       const SizedBox(height: 6),
@@ -1410,14 +1423,14 @@ class _HorizontalDayBlock extends StatelessWidget {
                               Container(width: 8, height: 8, decoration: BoxDecoration(color: c, shape: BoxShape.circle, boxShadow: [BoxShadow(color: c.withValues(alpha: 0.5), blurRadius: 3)])),
                               const SizedBox(width: 4),
                               Expanded(
-                                child: Text(text, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: Colors.white70), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                child: Text(text, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: onSurface.withValues(alpha: 0.7)), maxLines: 1, overflow: TextOverflow.ellipsis),
                               ),
                             ],
                           ),
                         );
                       }),
                       if (tasks!.length > 2)
-                        Text('+${tasks!.length - 2} rappels', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Colors.white38)),
+                        Text('+${tasks!.length - 2} rappels', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: onSurface.withValues(alpha: 0.4))),
                     ],
 
                     if (note != null || (tasks != null && tasks!.isNotEmpty)) ...[
@@ -1508,6 +1521,7 @@ class _MiniStat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1515,7 +1529,9 @@ class _MiniStat extends StatelessWidget {
           color: color.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: color.withValues(alpha: 0.3)),
-          boxShadow: [BoxShadow(color: color.withValues(alpha: 0.1), blurRadius: 6)],
+          boxShadow: isDark
+              ? [BoxShadow(color: color.withValues(alpha: 0.1), blurRadius: 6)]
+              : [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)],
         ),
         child: Column(
           children: [
@@ -1525,10 +1541,12 @@ class _MiniStat extends StatelessWidget {
                 fontSize: 16,
                 fontWeight: FontWeight.w800,
                 color: color,
-                shadows: [Shadow(color: color.withValues(alpha: 0.5), blurRadius: 4)],
+                shadows: isDark ? [Shadow(color: color.withValues(alpha: 0.5), blurRadius: 4)] : [],
               ),
             ),
-            Text(label, style: AppTextStyles.caption.copyWith(color: Colors.white54)),
+            Text(label, style: AppTextStyles.caption.copyWith(
+              color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+            )),
           ],
         ),
       ),

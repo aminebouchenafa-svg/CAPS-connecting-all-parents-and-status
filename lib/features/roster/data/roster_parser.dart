@@ -472,6 +472,17 @@ class RosterParser {
       }
     }
 
+    // Step 7b: Map STA (arrival) from timeRows[2] to flight days
+    // timeRows[2] has M values aligned to flightDayIndices (not timedDayIndices)
+    final flightArrivalTimes = <int, String>{};
+    if (timeRows.length >= 3 && flightDayIndices.isNotEmpty) {
+      final staRow = timeRows[2];
+      final n = [staRow.length, flightDayIndices.length].reduce((a, b) => a < b ? a : b);
+      for (int i = 0; i < n; i++) {
+        flightArrivalTimes[flightDayIndices[i]] = staRow[i];
+      }
+    }
+
     // Step 8: Extract extra flight rows (2nd legs, 3rd legs, etc.)
     final extraFlightRows = <List<String>>[];
     for (final dl in dataLines) {
@@ -536,12 +547,17 @@ class RosterParser {
       }
     }
 
-    // Step 8a: Map extra time rows (3rd/4th) to extra legs
+    // Step 8a: Map extra time rows to extra legs
+    // Extra leg times start from timeRows[3] (since timeRows[2] = STA of first legs)
     final extraLegTimes = <int, List<({String checkIn, String checkOut})>>{};
-    if (timeRows.length >= 4) {
-      for (int tier = 0; tier * 2 + 2 < timeRows.length && tier * 2 + 3 < timeRows.length; tier++) {
-        final extraCheckIn = timeRows[2 + tier * 2];
-        final extraCheckOut = timeRows[3 + tier * 2];
+    final extraTimeStartIdx = flightArrivalTimes.isNotEmpty ? 3 : 2;
+    if (timeRows.length >= extraTimeStartIdx + 2) {
+      for (int tier = 0;
+          extraTimeStartIdx + tier * 2 < timeRows.length &&
+              extraTimeStartIdx + tier * 2 + 1 < timeRows.length;
+          tier++) {
+        final extraCheckIn = timeRows[extraTimeStartIdx + tier * 2];
+        final extraCheckOut = timeRows[extraTimeStartIdx + tier * 2 + 1];
 
         final daysWithExtraLegs = flightDayIndices
             .where((fi) => extraLegs.containsKey(fi) && extraLegs[fi]!.length > tier)
@@ -594,7 +610,11 @@ class RosterParser {
       if (fn != null) {
         final route = flightRoutes[di];
         final times = flightTimes[di];
+        final arrivalStr = flightArrivalTimes[di];
 
+        // times.checkIn = report (timeRows[0]), times.checkOut = STD (timeRows[1])
+        // arrivalStr = STA (timeRows[2])
+        // For flights: show STD as departure, STA as arrival
         duties.add(RosterDuty(
           date: date,
           type: DutyType.flight,
@@ -602,9 +622,9 @@ class RosterParser {
           departure: route?.dep,
           arrival: route?.arr,
           checkIn: _timeFromStr(
-              date.year, date.month, date.day, times?.checkIn),
-          checkOut: _timeFromStr(
               date.year, date.month, date.day, times?.checkOut),
+          checkOut: _timeFromStr(
+              date.year, date.month, date.day, arrivalStr ?? times?.checkOut),
         ));
 
         // Add 2nd+ legs if available, with their times
@@ -667,6 +687,12 @@ class RosterParser {
     }
     debugSb.writeln('Timed days: ${timedDayIndices.length} indices: $timedDayIndices');
     debugSb.writeln('Times mapped: ${flightTimes.length}');
+    debugSb.writeln('Flight arrival times (STA): ${flightArrivalTimes.length}');
+    for (final e in flightArrivalTimes.entries) {
+      final date = e.key < dayDates.length ? dayDates[e.key] : null;
+      debugSb.writeln('  Day ${date?.day}: STA=${e.value}');
+    }
+    debugSb.writeln('Extra leg time start index: $extraTimeStartIdx');
     for (final e in flightTimes.entries) {
       final date = e.key < dayDates.length ? dayDates[e.key] : null;
       final act = dayActivities[e.key] ?? '?';

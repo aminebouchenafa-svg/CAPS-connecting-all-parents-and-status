@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/theme/theme_provider.dart';
 import '../../domain/entities/flight_status.dart';
 import '../providers/flight_status_provider.dart';
 import '../../../roster/presentation/providers/roster_provider.dart';
@@ -41,25 +42,33 @@ class DashboardPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final status = ref.watch(rosterFlightStatusProvider);
     final roster = ref.watch(rosterProvider);
+    final isDark = ref.watch(isDarkModeProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundDark,
       appBar: AppBar(
-        backgroundColor: AppColors.surfaceDark,
-        elevation: 0,
         title: Text(
           'C.A.P.S.',
           style: AppTextStyles.heading2.copyWith(
-            color: AppColors.neonCyan,
-            shadows: [
-              Shadow(
-                color: AppColors.neonCyan.withValues(alpha: 0.6),
-                blurRadius: 6,
-              ),
-            ],
+            color: isDark ? AppColors.neonCyan : Colors.white,
+            shadows: isDark
+                ? [Shadow(color: AppColors.neonCyan.withValues(alpha: 0.6), blurRadius: 6)]
+                : null,
           ),
         ),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: Icon(
+              isDark ? Icons.light_mode : Icons.dark_mode,
+              color: isDark ? AppColors.neonYellow : Colors.white,
+            ),
+            tooltip: isDark ? 'Mode Clair' : 'Mode Sombre',
+            onPressed: () {
+              ref.read(themeModeProvider.notifier).state =
+                  isDark ? ThemeMode.light : ThemeMode.dark;
+            },
+          ),
+        ],
       ),
       body: roster != null
           ? _DashboardContent(status: status, roster: roster)
@@ -73,23 +82,25 @@ class _NoRosterPrompt extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Container(
           padding: const EdgeInsets.all(32),
           decoration: BoxDecoration(
-            color: AppColors.cardDark,
+            color: isDark ? AppColors.cardDark : Colors.white,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: AppColors.neonCyan.withValues(alpha: 0.15),
+              color: isDark
+                  ? AppColors.neonCyan.withValues(alpha: 0.15)
+                  : Colors.grey.shade200,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: AppColors.neonCyan.withValues(alpha: 0.1),
-                blurRadius: 12,
-              ),
-            ],
+            boxShadow: isDark
+                ? [BoxShadow(color: AppColors.neonCyan.withValues(alpha: 0.1), blurRadius: 12)]
+                : [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, 2))],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -102,7 +113,7 @@ class _NoRosterPrompt extends StatelessWidget {
               const SizedBox(height: 16),
               Text(
                 'Bienvenue Capitaine',
-                style: AppTextStyles.heading2.copyWith(color: Colors.white),
+                style: AppTextStyles.heading2.copyWith(color: onSurface),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
@@ -110,28 +121,15 @@ class _NoRosterPrompt extends StatelessWidget {
                 'Chargez votre roster dans l\'onglet Roster '
                 'pour voir automatiquement votre programme.',
                 style: AppTextStyles.body.copyWith(
-                  color: Colors.white.withValues(alpha: 0.6),
+                  color: onSurface.withValues(alpha: 0.6),
                 ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
               ElevatedButton.icon(
                 onPressed: () => context.goNamed('roster'),
-                icon: const Icon(Icons.flight, color: AppColors.backgroundDark),
-                label: const Text(
-                  'Aller au Roster',
-                  style: TextStyle(color: AppColors.backgroundDark),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.neonCyan,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 14,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
+                icon: const Icon(Icons.flight),
+                label: const Text('Aller au Roster'),
               ),
             ],
           ),
@@ -192,10 +190,6 @@ class _DashboardContent extends ConsumerWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Today Card - hero card showing current status
-// ---------------------------------------------------------------------------
-
 class _TodayCard extends StatelessWidget {
   final FlightStatus? status;
   final Roster roster;
@@ -209,17 +203,19 @@ class _TodayCard extends StatelessWidget {
     final todayDuties = roster.dutiesForDate(today);
 
     if (status != null) {
-      return _buildStatusCard(status!);
+      return _buildStatusCard(context, status!);
     }
 
     if (todayDuties.isNotEmpty) {
-      return _buildDutyCard(todayDuties.first);
+      return _buildDutyCard(context, todayDuties.first);
     }
 
-    return _buildEmptyCard();
+    return _buildEmptyCard(context);
   }
 
-  Widget _buildStatusCard(FlightStatus status) {
+  Widget _buildStatusCard(BuildContext context, FlightStatus status) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     final glowColor = _statusColor(status.phase);
     final phaseDesc = switch (status.phase) {
       FlightPhase.enVol => 'En vol vers sa destination',
@@ -231,47 +227,34 @@ class _TodayCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: AppColors.cardDark,
+        color: isDark ? AppColors.cardDark : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: glowColor.withValues(alpha: 0.3)),
-        boxShadow: [
-          BoxShadow(
-            color: glowColor.withValues(alpha: 0.2),
-            blurRadius: 20,
-            spreadRadius: -2,
-          ),
-        ],
+        boxShadow: isDark
+            ? [BoxShadow(color: glowColor.withValues(alpha: 0.2), blurRadius: 20, spreadRadius: -2)]
+            : [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 2))],
       ),
       child: Column(
         children: [
-          // Phase emoji and label
-          Text(
-            status.phase.emoji,
-            style: const TextStyle(fontSize: 48),
-          ),
+          Text(status.phase.emoji, style: const TextStyle(fontSize: 48)),
           const SizedBox(height: 8),
           Text(
             status.phase.label,
             style: AppTextStyles.heading2.copyWith(
               color: glowColor,
-              shadows: [
-                Shadow(
-                  color: glowColor.withValues(alpha: 0.6),
-                  blurRadius: 6,
-                ),
-              ],
+              shadows: isDark
+                  ? [Shadow(color: glowColor.withValues(alpha: 0.6), blurRadius: 6)]
+                  : null,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             phaseDesc,
             style: AppTextStyles.body.copyWith(
-              color: Colors.white.withValues(alpha: 0.7),
+              color: onSurface.withValues(alpha: 0.7),
             ),
           ),
           const SizedBox(height: 16),
-
-          // Flight info
           if (status.flightNumber != null) ...[
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -287,8 +270,6 @@ class _TodayCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
           ],
-
-          // Location
           if (status.currentLocation != null) ...[
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -298,15 +279,13 @@ class _TodayCard extends StatelessWidget {
                 Flexible(
                   child: Text(
                     status.currentLocation!,
-                    style: AppTextStyles.body.copyWith(color: Colors.white),
+                    style: AppTextStyles.body.copyWith(color: onSurface),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
             ),
           ],
-
-          // Destination
           if (status.destination != null &&
               status.phase != FlightPhase.repos) ...[
             const SizedBox(height: 8),
@@ -327,8 +306,6 @@ class _TodayCard extends StatelessWidget {
               ],
             ),
           ],
-
-          // Countdown for non-repos
           if (status.phase != FlightPhase.repos &&
               status.estimatedEndTime != null) ...[
             const SizedBox(height: 16),
@@ -337,8 +314,6 @@ class _TodayCard extends StatelessWidget {
               glowColor: glowColor,
             ),
           ],
-
-          // Repos - all good
           if (status.phase == FlightPhase.repos) ...[
             const SizedBox(height: 12),
             Row(
@@ -360,39 +335,32 @@ class _TodayCard extends StatelessWidget {
     );
   }
 
-  Widget _buildDutyCard(RosterDuty duty) {
+  Widget _buildDutyCard(BuildContext context, RosterDuty duty) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     final glowColor = _neonColorForDuty(duty);
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: AppColors.cardDark,
+        color: isDark ? AppColors.cardDark : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: glowColor.withValues(alpha: 0.3)),
-        boxShadow: [
-          BoxShadow(
-            color: glowColor.withValues(alpha: 0.2),
-            blurRadius: 20,
-            spreadRadius: -2,
-          ),
-        ],
+        boxShadow: isDark
+            ? [BoxShadow(color: glowColor.withValues(alpha: 0.2), blurRadius: 20, spreadRadius: -2)]
+            : [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 2))],
       ),
       child: Column(
         children: [
-          Text(
-            _dutyEmoji(duty),
-            style: const TextStyle(fontSize: 48),
-          ),
+          Text(_dutyEmoji(duty), style: const TextStyle(fontSize: 48)),
           const SizedBox(height: 8),
           Text(
             duty.type.label,
             style: AppTextStyles.heading2.copyWith(
               color: glowColor,
-              shadows: [
-                Shadow(
-                  color: glowColor.withValues(alpha: 0.6),
-                  blurRadius: 6,
-                ),
-              ],
+              shadows: isDark
+                  ? [Shadow(color: glowColor.withValues(alpha: 0.6), blurRadius: 6)]
+                  : null,
             ),
           ),
           if (duty.activityCode != null) ...[
@@ -400,7 +368,7 @@ class _TodayCard extends StatelessWidget {
             Text(
               duty.activityCode!,
               style: AppTextStyles.body.copyWith(
-                color: Colors.white.withValues(alpha: 0.7),
+                color: onSurface.withValues(alpha: 0.7),
               ),
             ),
           ],
@@ -409,7 +377,7 @@ class _TodayCard extends StatelessWidget {
             Text(
               duty.notes!,
               style: AppTextStyles.caption.copyWith(
-                color: Colors.white.withValues(alpha: 0.5),
+                color: onSurface.withValues(alpha: 0.5),
               ),
             ),
           ],
@@ -418,21 +386,23 @@ class _TodayCard extends StatelessWidget {
     );
   }
 
-  Widget _buildEmptyCard() {
+  Widget _buildEmptyCard(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: AppColors.cardDark,
+        color: isDark ? AppColors.cardDark : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: AppColors.neonCyan.withValues(alpha: 0.15),
+          color: isDark
+              ? AppColors.neonCyan.withValues(alpha: 0.15)
+              : Colors.grey.shade200,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.neonCyan.withValues(alpha: 0.1),
-            blurRadius: 12,
-          ),
-        ],
+        boxShadow: isDark
+            ? [BoxShadow(color: AppColors.neonCyan.withValues(alpha: 0.1), blurRadius: 12)]
+            : [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: Column(
         children: [
@@ -440,13 +410,13 @@ class _TodayCard extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             'Aucune activite aujourd\'hui',
-            style: AppTextStyles.heading3.copyWith(color: Colors.white),
+            style: AppTextStyles.heading3.copyWith(color: onSurface),
           ),
           const SizedBox(height: 4),
           Text(
             'Pas de duty programme pour cette journee',
             style: AppTextStyles.body.copyWith(
-              color: Colors.white.withValues(alpha: 0.5),
+              color: onSurface.withValues(alpha: 0.5),
             ),
           ),
         ],
@@ -465,10 +435,6 @@ class _TodayCard extends StatelessWidget {
       };
 }
 
-// ---------------------------------------------------------------------------
-// Countdown Section for today card
-// ---------------------------------------------------------------------------
-
 class _CountdownSection extends StatelessWidget {
   final DateTime targetTime;
   final Color glowColor;
@@ -480,6 +446,8 @@ class _CountdownSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     final remaining = targetTime.difference(DateTime.now());
     if (remaining.isNegative) {
       return Text(
@@ -496,14 +464,14 @@ class _CountdownSection extends StatelessWidget {
         Text(
           'De retour dans',
           style: AppTextStyles.caption.copyWith(
-            color: Colors.white.withValues(alpha: 0.6),
+            color: onSurface.withValues(alpha: 0.6),
           ),
         ),
         const SizedBox(height: 4),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            _timeBlock('${hours}h', glowColor),
+            _timeBlock(context, '${hours}h', glowColor, isDark),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Text(
@@ -511,14 +479,14 @@ class _CountdownSection extends StatelessWidget {
                 style: AppTextStyles.heading1.copyWith(color: glowColor),
               ),
             ),
-            _timeBlock('${minutes}m', glowColor),
+            _timeBlock(context, '${minutes}m', glowColor, isDark),
           ],
         ),
       ],
     );
   }
 
-  Widget _timeBlock(String value, Color color) {
+  Widget _timeBlock(BuildContext context, String value, Color color, bool isDark) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
@@ -530,18 +498,14 @@ class _CountdownSection extends StatelessWidget {
         value,
         style: AppTextStyles.heading1.copyWith(
           color: color,
-          shadows: [
-            Shadow(color: color.withValues(alpha: 0.6), blurRadius: 6),
-          ],
+          shadows: isDark
+              ? [Shadow(color: color.withValues(alpha: 0.6), blurRadius: 6)]
+              : null,
         ),
       ),
     );
   }
 }
-
-// ---------------------------------------------------------------------------
-// Next Flight Card
-// ---------------------------------------------------------------------------
 
 class _NextFlightCard extends StatelessWidget {
   final RosterDuty nextFlight;
@@ -550,6 +514,8 @@ class _NextFlightCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     final now = DateTime.now();
     final flightDate = nextFlight.date;
     final daysUntil = DateTime(flightDate.year, flightDate.month, flightDate.day)
@@ -564,23 +530,20 @@ class _NextFlightCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppColors.cardDark,
+        color: isDark ? AppColors.cardDark : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: AppColors.neonCyan.withValues(alpha: 0.2),
+          color: isDark
+              ? AppColors.neonCyan.withValues(alpha: 0.2)
+              : Colors.grey.shade200,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.neonCyan.withValues(alpha: 0.15),
-            blurRadius: 12,
-            spreadRadius: -2,
-          ),
-        ],
+        boxShadow: isDark
+            ? [BoxShadow(color: AppColors.neonCyan.withValues(alpha: 0.15), blurRadius: 12, spreadRadius: -2)]
+            : [BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8, offset: const Offset(0, 2))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
           Row(
             children: [
               Icon(Icons.flight_takeoff, size: 20, color: AppColors.neonCyan),
@@ -589,18 +552,14 @@ class _NextFlightCard extends StatelessWidget {
                 'Prochain Vol',
                 style: AppTextStyles.heading3.copyWith(
                   color: AppColors.neonCyan,
-                  shadows: [
-                    Shadow(
-                      color: AppColors.neonCyan.withValues(alpha: 0.6),
-                      blurRadius: 6,
-                    ),
-                  ],
+                  shadows: isDark
+                      ? [Shadow(color: AppColors.neonCyan.withValues(alpha: 0.6), blurRadius: 6)]
+                      : null,
                 ),
               ),
               const Spacer(),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: AppColors.neonCyan.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
@@ -623,68 +582,38 @@ class _NextFlightCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-
-          // Flight number
           if (nextFlight.flightNumber != null)
             Text(
               nextFlight.flightNumber!,
-              style: AppTextStyles.heading2.copyWith(color: Colors.white),
+              style: AppTextStyles.heading2.copyWith(color: onSurface),
             ),
           const SizedBox(height: 12),
-
-          // Route
           Row(
             children: [
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      dep,
-                      style: AppTextStyles.heading3.copyWith(
-                        color: Colors.white,
-                      ),
-                    ),
-                    Text(
-                      depName,
-                      style: AppTextStyles.caption.copyWith(
-                        color: Colors.white.withValues(alpha: 0.6),
-                      ),
-                    ),
+                    Text(dep, style: AppTextStyles.heading3.copyWith(color: onSurface)),
+                    Text(depName, style: AppTextStyles.caption.copyWith(color: onSurface.withValues(alpha: 0.6))),
                   ],
                 ),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Icon(
-                  Icons.arrow_forward,
-                  color: AppColors.neonCyan.withValues(alpha: 0.6),
-                  size: 20,
-                ),
+                child: Icon(Icons.arrow_forward, color: AppColors.neonCyan.withValues(alpha: 0.6), size: 20),
               ),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Text(
-                      arr,
-                      style: AppTextStyles.heading3.copyWith(
-                        color: Colors.white,
-                      ),
-                    ),
-                    Text(
-                      arrName,
-                      style: AppTextStyles.caption.copyWith(
-                        color: Colors.white.withValues(alpha: 0.6),
-                      ),
-                    ),
+                    Text(arr, style: AppTextStyles.heading3.copyWith(color: onSurface)),
+                    Text(arrName, style: AppTextStyles.caption.copyWith(color: onSurface.withValues(alpha: 0.6))),
                   ],
                 ),
               ),
             ],
           ),
-
-          // Times
           if (nextFlight.checkIn != null || nextFlight.checkOut != null) ...[
             const SizedBox(height: 12),
             Row(
@@ -694,7 +623,7 @@ class _NextFlightCard extends StatelessWidget {
                     child: Text(
                       'Depart: ${_formatTime(nextFlight.checkIn!)}',
                       style: AppTextStyles.caption.copyWith(
-                        color: Colors.white.withValues(alpha: 0.5),
+                        color: onSurface.withValues(alpha: 0.5),
                       ),
                     ),
                   ),
@@ -703,7 +632,7 @@ class _NextFlightCard extends StatelessWidget {
                     child: Text(
                       'Arrivee: ${_formatTime(nextFlight.checkOut!)}',
                       style: AppTextStyles.caption.copyWith(
-                        color: Colors.white.withValues(alpha: 0.5),
+                        color: onSurface.withValues(alpha: 0.5),
                       ),
                       textAlign: TextAlign.end,
                     ),
@@ -717,10 +646,6 @@ class _NextFlightCard extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Week Preview - horizontal scrollable 7-day view
-// ---------------------------------------------------------------------------
-
 class _WeekPreview extends StatelessWidget {
   final Roster roster;
 
@@ -728,6 +653,7 @@ class _WeekPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final days = List.generate(7, (i) => today.add(Duration(days: i)));
@@ -739,9 +665,7 @@ class _WeekPreview extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: 12),
           child: Text(
             'Semaine a venir',
-            style: AppTextStyles.heading3.copyWith(
-              color: Colors.white,
-            ),
+            style: AppTextStyles.heading3.copyWith(color: onSurface),
           ),
         ),
         SizedBox(
@@ -754,11 +678,7 @@ class _WeekPreview extends StatelessWidget {
               final date = days[index];
               final duties = roster.dutiesForDate(date);
               final isToday = index == 0;
-              return _DayBlock(
-                date: date,
-                duties: duties,
-                isToday: isToday,
-              );
+              return _DayBlock(date: date, duties: duties, isToday: isToday);
             },
           ),
         ),
@@ -780,7 +700,8 @@ class _DayBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Monday = 1 in Dart, so index = weekday - 1
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     final dayName = _dayNames[date.weekday - 1];
     final hasDuties = duties.isNotEmpty;
     final primaryDuty = hasDuties ? duties.first : null;
@@ -799,22 +720,20 @@ class _DayBlock extends StatelessWidget {
       decoration: BoxDecoration(
         color: isToday
             ? glowColor.withValues(alpha: 0.15)
-            : AppColors.cardDark,
+            : (isDark ? AppColors.cardDark : Colors.white),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isToday
               ? glowColor.withValues(alpha: 0.5)
-              : glowColor.withValues(alpha: 0.15),
+              : (isDark ? glowColor.withValues(alpha: 0.15) : Colors.grey.shade200),
         ),
         boxShadow: isToday
-            ? [
-                BoxShadow(
-                  color: glowColor.withValues(alpha: 0.2),
-                  blurRadius: 8,
-                  spreadRadius: -2,
-                ),
-              ]
-            : null,
+            ? (isDark
+                ? [BoxShadow(color: glowColor.withValues(alpha: 0.2), blurRadius: 8, spreadRadius: -2)]
+                : [BoxShadow(color: glowColor.withValues(alpha: 0.15), blurRadius: 6)])
+            : (isDark
+                ? null
+                : [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 4)]),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -822,7 +741,7 @@ class _DayBlock extends StatelessWidget {
           Text(
             dayName,
             style: AppTextStyles.caption.copyWith(
-              color: Colors.white.withValues(alpha: 0.6),
+              color: onSurface.withValues(alpha: 0.6),
               fontWeight: isToday ? FontWeight.w700 : FontWeight.w400,
             ),
           ),
@@ -830,7 +749,7 @@ class _DayBlock extends StatelessWidget {
           Text(
             '${date.day}',
             style: AppTextStyles.heading3.copyWith(
-              color: isToday ? glowColor : Colors.white,
+              color: isToday ? glowColor : onSurface,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -858,10 +777,6 @@ class _DayBlock extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Quick Stats - row of stat cards
-// ---------------------------------------------------------------------------
-
 class _QuickStats extends StatelessWidget {
   final Roster roster;
 
@@ -869,6 +784,8 @@ class _QuickStats extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -876,7 +793,7 @@ class _QuickStats extends StatelessWidget {
           padding: const EdgeInsets.only(bottom: 12),
           child: Text(
             'Statistiques du mois',
-            style: AppTextStyles.heading3.copyWith(color: Colors.white),
+            style: AppTextStyles.heading3.copyWith(color: onSurface),
           ),
         ),
         Row(
@@ -938,19 +855,20 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
       decoration: BoxDecoration(
-        color: AppColors.cardDark,
+        color: isDark ? AppColors.cardDark : Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withValues(alpha: 0.2)),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.1),
-            blurRadius: 8,
-            spreadRadius: -2,
-          ),
-        ],
+        border: Border.all(
+          color: isDark ? color.withValues(alpha: 0.2) : Colors.grey.shade200,
+        ),
+        boxShadow: isDark
+            ? [BoxShadow(color: color.withValues(alpha: 0.1), blurRadius: 8, spreadRadius: -2)]
+            : [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 6)],
       ),
       child: Column(
         children: [
@@ -960,19 +878,16 @@ class _StatCard extends StatelessWidget {
             value,
             style: AppTextStyles.heading3.copyWith(
               color: color,
-              shadows: [
-                Shadow(
-                  color: color.withValues(alpha: 0.6),
-                  blurRadius: 6,
-                ),
-              ],
+              shadows: isDark
+                  ? [Shadow(color: color.withValues(alpha: 0.6), blurRadius: 6)]
+                  : null,
             ),
           ),
           const SizedBox(height: 2),
           Text(
             label,
             style: AppTextStyles.caption.copyWith(
-              color: Colors.white.withValues(alpha: 0.6),
+              color: onSurface.withValues(alpha: 0.6),
               fontSize: 10,
             ),
           ),

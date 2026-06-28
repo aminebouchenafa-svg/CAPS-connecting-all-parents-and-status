@@ -69,15 +69,15 @@ class RosterDayPage extends ConsumerWidget {
     final monthName = _monthNames[date.month - 1];
 
     return Scaffold(
-      backgroundColor: AppColors.backgroundDark,
       appBar: AppBar(
-        backgroundColor: AppColors.surfaceDark,
         elevation: 0,
         title: Text(
           'Detail du Jour',
-          style: AppTextStyles.heading3.copyWith(color: Colors.white),
+          style: AppTextStyles.heading3.copyWith(
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
         ),
-        iconTheme: const IconThemeData(color: AppColors.neonCyan),
+        iconTheme: IconThemeData(color: Theme.of(context).colorScheme.primary),
       ),
       body: Column(
         children: [
@@ -125,31 +125,31 @@ class RosterDayPage extends ConsumerWidget {
   }
 
   Widget _buildEmpty() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            '📋',
-            style: const TextStyle(fontSize: 48),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Aucune activite ce jour',
-            style: AppTextStyles.heading3.copyWith(
-              color: Colors.white.withValues(alpha: 0.5),
+    return Builder(builder: (context) {
+      final onSurface = Theme.of(context).colorScheme.onSurface;
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('📋', style: TextStyle(fontSize: 48)),
+            const SizedBox(height: 16),
+            Text(
+              'Aucune activite ce jour',
+              style: AppTextStyles.heading3.copyWith(
+                color: onSurface.withValues(alpha: 0.5),
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Pas de duty programme',
-            style: AppTextStyles.body.copyWith(
-              color: Colors.white.withValues(alpha: 0.3),
+            const SizedBox(height: 8),
+            Text(
+              'Pas de duty programme',
+              style: AppTextStyles.body.copyWith(
+                color: onSurface.withValues(alpha: 0.3),
+              ),
             ),
-          ),
-        ],
-      ),
-    );
+          ],
+        ),
+      );
+    });
   }
 
   Widget _buildTimeline(List<RosterDuty> duties) {
@@ -189,6 +189,8 @@ class _DayNavHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final dateOnly = DateTime(date.year, date.month, date.day);
@@ -197,10 +199,10 @@ class _DayNavHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
       decoration: BoxDecoration(
-        color: AppColors.surfaceDark,
+        color: Theme.of(context).colorScheme.surface,
         border: Border(
           bottom: BorderSide(
-            color: AppColors.neonCyan.withValues(alpha: 0.1),
+            color: isDark ? AppColors.neonCyan.withValues(alpha: 0.1) : Colors.grey.withValues(alpha: 0.2),
           ),
         ),
       ),
@@ -208,24 +210,19 @@ class _DayNavHeader extends StatelessWidget {
         children: [
           IconButton(
             onPressed: onPrevious,
-            icon: const Icon(Icons.chevron_left, color: AppColors.neonCyan),
+            icon: Icon(Icons.chevron_left, color: Theme.of(context).colorScheme.primary),
           ),
           Expanded(
             child: Column(
               children: [
                 if (isToday)
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 2,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
                     margin: const EdgeInsets.only(bottom: 4),
                     decoration: BoxDecoration(
                       color: AppColors.neonCyan.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: AppColors.neonCyan.withValues(alpha: 0.3),
-                      ),
+                      border: Border.all(color: AppColors.neonCyan.withValues(alpha: 0.3)),
                     ),
                     child: Text(
                       'Aujourd\'hui',
@@ -238,22 +235,16 @@ class _DayNavHeader extends StatelessWidget {
                 Text(
                   fullDayName,
                   style: AppTextStyles.heading2.copyWith(
-                    color: isToday ? AppColors.neonCyan : Colors.white,
-                    shadows: isToday
-                        ? [
-                            Shadow(
-                              color:
-                                  AppColors.neonCyan.withValues(alpha: 0.6),
-                              blurRadius: 6,
-                            ),
-                          ]
+                    color: isToday ? AppColors.neonCyan : onSurface,
+                    shadows: isToday && isDark
+                        ? [Shadow(color: AppColors.neonCyan.withValues(alpha: 0.6), blurRadius: 6)]
                         : null,
                   ),
                 ),
                 Text(
                   '${date.day} $monthName ${date.year}',
                   style: AppTextStyles.body.copyWith(
-                    color: Colors.white.withValues(alpha: 0.6),
+                    color: onSurface.withValues(alpha: 0.6),
                   ),
                 ),
               ],
@@ -261,7 +252,7 @@ class _DayNavHeader extends StatelessWidget {
           ),
           IconButton(
             onPressed: onNext,
-            icon: const Icon(Icons.chevron_right, color: AppColors.neonCyan),
+            icon: Icon(Icons.chevron_right, color: Theme.of(context).colorScheme.primary),
           ),
         ],
       ),
@@ -284,6 +275,7 @@ class _TimelineEntry extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final glowColor = _neonColorForDuty(duty);
 
     return IntrinsicHeight(
@@ -302,13 +294,9 @@ class _TimelineEntry extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: glowColor,
                     shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: glowColor.withValues(alpha: 0.5),
-                        blurRadius: 8,
-                        spreadRadius: 1,
-                      ),
-                    ],
+                    boxShadow: isDark
+                        ? [BoxShadow(color: glowColor.withValues(alpha: 0.5), blurRadius: 8, spreadRadius: 1)]
+                        : [],
                   ),
                 ),
                 // Line
@@ -337,7 +325,7 @@ class _TimelineEntry extends StatelessWidget {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.only(bottom: 16),
-              child: _buildCard(glowColor),
+              child: _buildCard(context, glowColor),
             ),
           ),
         ],
@@ -345,14 +333,18 @@ class _TimelineEntry extends StatelessWidget {
     );
   }
 
-  Widget _buildCard(Color glowColor) {
+  Widget _buildCard(BuildContext context, Color glowColor) {
     if (duty.isFlight) {
-      return _buildFlightCard(glowColor);
+      return _buildFlightCard(context, glowColor);
     }
-    return _buildActivityCard(glowColor);
+    return _buildActivityCard(context, glowColor);
   }
 
-  Widget _buildFlightCard(Color glowColor) {
+  Widget _buildFlightCard(BuildContext context, Color glowColor) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final cardBg = isDark ? AppColors.cardDark : Colors.white;
+    final innerBg = isDark ? AppColors.backgroundDark : Colors.grey.shade50;
     final dep = duty.departure ?? '';
     final arr = duty.arrival ?? '';
     final depName = dep.isNotEmpty ? RosterParser.airportName(dep) : '';
@@ -361,132 +353,84 @@ class _TimelineEntry extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.cardDark,
+        color: cardBg,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: glowColor.withValues(alpha: 0.2)),
         boxShadow: [
-          BoxShadow(
-            color: glowColor.withValues(alpha: 0.15),
-            blurRadius: 12,
-            spreadRadius: -2,
-          ),
+          if (isDark)
+            BoxShadow(color: glowColor.withValues(alpha: 0.15), blurRadius: 12, spreadRadius: -2)
+          else
+            BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Flight number badge
           Row(
             children: [
-              Text(
-                _dutyEmoji(duty),
-                style: const TextStyle(fontSize: 20),
-              ),
+              Text(_dutyEmoji(duty), style: const TextStyle(fontSize: 20)),
               const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: glowColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: glowColor.withValues(alpha: 0.3),
-                  ),
+                  border: Border.all(color: glowColor.withValues(alpha: 0.3)),
                 ),
                 child: Text(
                   duty.flightNumber ?? 'Vol',
-                  style: AppTextStyles.bodyBold.copyWith(
-                    color: glowColor,
-                  ),
+                  style: AppTextStyles.bodyBold.copyWith(color: glowColor),
                 ),
               ),
               const Spacer(),
-              Text(
-                'Vol',
-                style: AppTextStyles.caption.copyWith(
-                  color: Colors.white.withValues(alpha: 0.4),
-                ),
-              ),
+              Text('Vol', style: AppTextStyles.caption.copyWith(color: onSurface.withValues(alpha: 0.4))),
             ],
           ),
           const SizedBox(height: 16),
-
-          // Route: departure -> arrival
           if (dep.isNotEmpty && arr.isNotEmpty)
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.backgroundDark,
+                color: innerBg,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Row(
                 children: [
-                  // Departure
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
-                            Icon(
-                              Icons.flight_takeoff,
-                              size: 16,
-                              color: glowColor,
-                            ),
+                            Icon(Icons.flight_takeoff, size: 16, color: glowColor),
                             const SizedBox(width: 4),
-                            Text(
-                              dep,
-                              style: AppTextStyles.heading3.copyWith(
-                                color: Colors.white,
-                              ),
-                            ),
+                            Text(dep, style: AppTextStyles.heading3.copyWith(color: onSurface)),
                           ],
                         ),
                         const SizedBox(height: 2),
-                        Text(
-                          depName,
-                          style: AppTextStyles.caption.copyWith(
-                            color: Colors.white.withValues(alpha: 0.6),
-                          ),
-                        ),
+                        Text(depName, style: AppTextStyles.caption.copyWith(color: onSurface.withValues(alpha: 0.6))),
                         if (duty.checkIn != null) ...[
                           const SizedBox(height: 4),
-                          Text(
-                            _formatTime(duty.checkIn!),
-                            style: AppTextStyles.bodyBold.copyWith(
-                              color: Colors.white.withValues(alpha: 0.8),
-                            ),
-                          ),
+                          Text(_formatTime(duty.checkIn!), style: AppTextStyles.bodyBold.copyWith(color: onSurface.withValues(alpha: 0.8))),
                         ],
                       ],
                     ),
                   ),
-                  // Arrow
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                     child: Column(
                       children: [
-                        Icon(
-                          Icons.arrow_forward,
-                          color: glowColor.withValues(alpha: 0.5),
-                          size: 20,
-                        ),
+                        Icon(Icons.arrow_forward, color: glowColor.withValues(alpha: 0.5), size: 20),
                         if (duty.checkIn != null && duty.checkOut != null) ...[
                           const SizedBox(height: 4),
                           Text(
                             _flightDuration(duty.checkIn!, duty.checkOut!),
-                            style: AppTextStyles.caption.copyWith(
-                              color: Colors.white.withValues(alpha: 0.4),
-                              fontSize: 10,
-                            ),
+                            style: AppTextStyles.caption.copyWith(color: onSurface.withValues(alpha: 0.4), fontSize: 10),
                           ),
                         ],
                       ],
                     ),
                   ),
-                  // Arrival
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
@@ -494,35 +438,16 @@ class _TimelineEntry extends StatelessWidget {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
-                            Text(
-                              arr,
-                              style: AppTextStyles.heading3.copyWith(
-                                color: Colors.white,
-                              ),
-                            ),
+                            Text(arr, style: AppTextStyles.heading3.copyWith(color: onSurface)),
                             const SizedBox(width: 4),
-                            Icon(
-                              Icons.flight_land,
-                              size: 16,
-                              color: AppColors.neonGreen,
-                            ),
+                            Icon(Icons.flight_land, size: 16, color: AppColors.neonGreen),
                           ],
                         ),
                         const SizedBox(height: 2),
-                        Text(
-                          arrName,
-                          style: AppTextStyles.caption.copyWith(
-                            color: Colors.white.withValues(alpha: 0.6),
-                          ),
-                        ),
+                        Text(arrName, style: AppTextStyles.caption.copyWith(color: onSurface.withValues(alpha: 0.6))),
                         if (duty.checkOut != null) ...[
                           const SizedBox(height: 4),
-                          Text(
-                            _formatTime(duty.checkOut!),
-                            style: AppTextStyles.bodyBold.copyWith(
-                              color: Colors.white.withValues(alpha: 0.8),
-                            ),
-                          ),
+                          Text(_formatTime(duty.checkOut!), style: AppTextStyles.bodyBold.copyWith(color: onSurface.withValues(alpha: 0.8))),
                         ],
                       ],
                     ),
@@ -530,35 +455,32 @@ class _TimelineEntry extends StatelessWidget {
                 ],
               ),
             ),
-
-          // Notes
           if (duty.notes != null && duty.notes!.isNotEmpty) ...[
             const SizedBox(height: 12),
-            Text(
-              duty.notes!,
-              style: AppTextStyles.caption.copyWith(
-                color: Colors.white.withValues(alpha: 0.5),
-              ),
-            ),
+            Text(duty.notes!, style: AppTextStyles.caption.copyWith(color: onSurface.withValues(alpha: 0.5))),
           ],
         ],
       ),
     );
   }
 
-  Widget _buildActivityCard(Color glowColor) {
+  Widget _buildActivityCard(BuildContext context, Color glowColor) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    final cardBg = isDark ? AppColors.cardDark : Colors.white;
+    final innerBg = isDark ? AppColors.backgroundDark : Colors.grey.shade50;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.cardDark,
+        color: cardBg,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: glowColor.withValues(alpha: 0.2)),
         boxShadow: [
-          BoxShadow(
-            color: glowColor.withValues(alpha: 0.15),
-            blurRadius: 12,
-            spreadRadius: -2,
-          ),
+          if (isDark)
+            BoxShadow(color: glowColor.withValues(alpha: 0.15), blurRadius: 12, spreadRadius: -2)
+          else
+            BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 8),
         ],
       ),
       child: Column(
@@ -566,100 +488,47 @@ class _TimelineEntry extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text(
-                _dutyEmoji(duty),
-                style: const TextStyle(fontSize: 20),
-              ),
+              Text(_dutyEmoji(duty), style: const TextStyle(fontSize: 20)),
               const SizedBox(width: 8),
-              // Activity code badge
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: glowColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                    color: glowColor.withValues(alpha: 0.3),
-                  ),
+                  border: Border.all(color: glowColor.withValues(alpha: 0.3)),
                 ),
-                child: Text(
-                  duty.activityCode ?? duty.type.label,
-                  style: AppTextStyles.bodyBold.copyWith(color: glowColor),
-                ),
+                child: Text(duty.activityCode ?? duty.type.label, style: AppTextStyles.bodyBold.copyWith(color: glowColor)),
               ),
               const Spacer(),
-              Text(
-                duty.type.label,
-                style: AppTextStyles.caption.copyWith(
-                  color: Colors.white.withValues(alpha: 0.4),
-                ),
-              ),
+              Text(duty.type.label, style: AppTextStyles.caption.copyWith(color: onSurface.withValues(alpha: 0.4))),
             ],
           ),
-
-          // Description / notes
           if (duty.notes != null && duty.notes!.isNotEmpty) ...[
             const SizedBox(height: 12),
-            Text(
-              duty.notes!,
-              style: AppTextStyles.body.copyWith(
-                color: Colors.white.withValues(alpha: 0.7),
-              ),
-            ),
+            Text(duty.notes!, style: AppTextStyles.body.copyWith(color: onSurface.withValues(alpha: 0.7))),
           ],
-
-          // Time range for standby
           if (duty.checkIn != null || duty.checkOut != null) ...[
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.backgroundDark,
-                borderRadius: BorderRadius.circular(8),
-              ),
+              decoration: BoxDecoration(color: innerBg, borderRadius: BorderRadius.circular(8)),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   if (duty.checkIn != null)
                     Column(
                       children: [
-                        Text(
-                          'Debut',
-                          style: AppTextStyles.caption.copyWith(
-                            color: Colors.white.withValues(alpha: 0.5),
-                          ),
-                        ),
-                        Text(
-                          _formatTime(duty.checkIn!),
-                          style: AppTextStyles.bodyBold.copyWith(
-                            color: Colors.white,
-                          ),
-                        ),
+                        Text('Debut', style: AppTextStyles.caption.copyWith(color: onSurface.withValues(alpha: 0.5))),
+                        Text(_formatTime(duty.checkIn!), style: AppTextStyles.bodyBold.copyWith(color: onSurface)),
                       ],
                     ),
                   if (duty.checkIn != null && duty.checkOut != null)
-                    Container(
-                      width: 1,
-                      height: 30,
-                      color: Colors.white.withValues(alpha: 0.1),
-                    ),
+                    Container(width: 1, height: 30, color: onSurface.withValues(alpha: 0.1)),
                   if (duty.checkOut != null)
                     Column(
                       children: [
-                        Text(
-                          'Fin',
-                          style: AppTextStyles.caption.copyWith(
-                            color: Colors.white.withValues(alpha: 0.5),
-                          ),
-                        ),
-                        Text(
-                          _formatTime(duty.checkOut!),
-                          style: AppTextStyles.bodyBold.copyWith(
-                            color: Colors.white,
-                          ),
-                        ),
+                        Text('Fin', style: AppTextStyles.caption.copyWith(color: onSurface.withValues(alpha: 0.5))),
+                        Text(_formatTime(duty.checkOut!), style: AppTextStyles.bodyBold.copyWith(color: onSurface)),
                       ],
                     ),
                 ],
