@@ -409,11 +409,7 @@ class _RosterCalendar extends ConsumerWidget {
                   note: note,
                   tasks: dayTasks,
                   customColor: customColor,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => RosterDayPage(date: date)),
-                  ),
-                  onLongPress: () => _showDayDetail(context, ref, date, duties, notes, tasks, customColors),
+                  onTap: () => _showDayDetail(context, ref, date, duties, notes, tasks, customColors),
                 );
               }).toList(),
             ),
@@ -728,6 +724,40 @@ class _RosterCalendar extends ConsumerWidget {
                           Text(dayName, style: AppTextStyles.heading3.copyWith(color: Colors.white)),
                           Text('${_monthNames[date.month]} ${date.year}', style: AppTextStyles.caption.copyWith(color: Colors.white54)),
                         ],
+                      ),
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          Navigator.push(
+                            ctx,
+                            MaterialPageRoute(builder: (_) => RosterDayPage(date: date)),
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppColors.neonMagenta.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppColors.neonMagenta.withValues(alpha: 0.4)),
+                            boxShadow: [BoxShadow(color: AppColors.neonMagenta.withValues(alpha: 0.2), blurRadius: 6)],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.today, size: 16, color: AppColors.neonMagenta),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Détail',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.neonMagenta,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     ],
                   ),

@@ -13,13 +13,13 @@ class WelcomePage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.backgroundDark,
       body: SafeArea(
         child: PageView(
           children: [
             _WelcomeSlide(
               icon: Icons.flight_takeoff,
-              iconColor: AppColors.primary,
+              iconColor: AppColors.neonCyan,
               title: 'Bienvenue sur C.A.P.S.',
               subtitle: 'Cockpit Familial',
               description:
@@ -35,7 +35,7 @@ class WelcomePage extends ConsumerWidget {
             ),
             _WelcomeSlide(
               icon: Icons.radar,
-              iconColor: AppColors.statusEnVol,
+              iconColor: AppColors.neonCyan,
               title: '4 phases de vol',
               subtitle: 'Pour savoir où est Papa',
               description:
@@ -50,7 +50,7 @@ class WelcomePage extends ConsumerWidget {
             ),
             _WelcomeSlide(
               icon: Icons.timer,
-              iconColor: AppColors.accent,
+              iconColor: AppColors.neonMagenta,
               title: 'Compte à rebours',
               subtitle: 'Papa rentre dans combien de temps ?',
               description:
@@ -96,22 +96,54 @@ class _WelcomeSlide extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 72, color: iconColor),
-          const SizedBox(height: 20),
-          Text(title, style: AppTextStyles.heading1, textAlign: TextAlign.center),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: iconColor.withValues(alpha: 0.1),
+              border: Border.all(color: iconColor.withValues(alpha: 0.3)),
+              boxShadow: [
+                BoxShadow(color: iconColor.withValues(alpha: 0.3), blurRadius: 20, spreadRadius: -4),
+              ],
+            ),
+            child: Icon(icon, size: 56, color: iconColor),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            title,
+            style: AppTextStyles.heading1.copyWith(
+              color: Colors.white,
+              shadows: [Shadow(color: AppColors.neonCyan.withValues(alpha: 0.4), blurRadius: 8)],
+            ),
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 6),
           Text(
             subtitle,
-            style: AppTextStyles.bodyBold.copyWith(color: AppColors.accent),
+            style: AppTextStyles.bodyBold.copyWith(
+              color: AppColors.neonMagenta,
+              shadows: [Shadow(color: AppColors.neonMagenta.withValues(alpha: 0.5), blurRadius: 6)],
+            ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 28),
           Expanded(
-            child: SingleChildScrollView(
-              child: Text(
-                description,
-                style: AppTextStyles.body.copyWith(height: 1.6),
-                textAlign: TextAlign.left,
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.cardDark,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.neonCyan.withValues(alpha: 0.1)),
+              ),
+              child: SingleChildScrollView(
+                child: Text(
+                  description,
+                  style: AppTextStyles.body.copyWith(
+                    height: 1.6,
+                    color: Colors.white70,
+                  ),
+                  textAlign: TextAlign.left,
+                ),
               ),
             ),
           ),
@@ -119,14 +151,14 @@ class _WelcomeSlide extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.arrow_back_ios, size: 12, color: Colors.grey[400]),
+              Icon(Icons.arrow_back_ios, size: 12, color: AppColors.neonCyan.withValues(alpha: 0.4)),
               const SizedBox(width: 4),
               Text(
                 'Glissez pour continuer',
-                style: AppTextStyles.caption.copyWith(color: Colors.grey[400]),
+                style: AppTextStyles.caption.copyWith(color: AppColors.neonCyan.withValues(alpha: 0.4)),
               ),
               const SizedBox(width: 4),
-              Icon(Icons.arrow_forward_ios, size: 12, color: Colors.grey[400]),
+              Icon(Icons.arrow_forward_ios, size: 12, color: AppColors.neonCyan.withValues(alpha: 0.4)),
             ],
           ),
           const SizedBox(height: 8),
@@ -148,46 +180,88 @@ class _LastSlide extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.calendar_month, size: 72, color: AppColors.success),
-          const SizedBox(height: 20),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.neonGreen.withValues(alpha: 0.1),
+              border: Border.all(color: AppColors.neonGreen.withValues(alpha: 0.3)),
+              boxShadow: [
+                BoxShadow(color: AppColors.neonGreen.withValues(alpha: 0.3), blurRadius: 20, spreadRadius: -4),
+              ],
+            ),
+            child: Icon(Icons.calendar_month, size: 56, color: AppColors.neonGreen),
+          ),
+          const SizedBox(height: 24),
           Text(
             'Calendrier familial',
-            style: AppTextStyles.heading1,
+            style: AppTextStyles.heading1.copyWith(
+              color: Colors.white,
+              shadows: [Shadow(color: AppColors.neonGreen.withValues(alpha: 0.4), blurRadius: 8)],
+            ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 6),
           Text(
             'Toute la famille sur la même page',
-            style: AppTextStyles.bodyBold.copyWith(color: AppColors.accent),
+            style: AppTextStyles.bodyBold.copyWith(
+              color: AppColors.neonMagenta,
+              shadows: [Shadow(color: AppColors.neonMagenta.withValues(alpha: 0.5), blurRadius: 6)],
+            ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 28),
           Expanded(
-            child: SingleChildScrollView(
-              child: Text(
-                'Les rotations d\'Amine et les événements '
-                'familiaux au même endroit :\n\n'
-                '✈️  Rotations — Vols d\'Amine\n\n'
-                '📚  École — Spectacles, réunions\n\n'
-                '🏥  Médical — RDV pédiatre, vaccins\n\n'
-                '🎂  Famille — Anniversaires, sorties\n\n'
-                '⚽  Activités — Sport, loisirs\n\n'
-                'Tout le monde sait ce qui se passe, '
-                'même quand Amine est en vol.',
-                style: AppTextStyles.body.copyWith(height: 1.6),
-                textAlign: TextAlign.left,
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.cardDark,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.neonGreen.withValues(alpha: 0.1)),
+              ),
+              child: SingleChildScrollView(
+                child: Text(
+                  'Les rotations d\'Amine et les événements '
+                  'familiaux au même endroit :\n\n'
+                  '✈️  Rotations — Vols d\'Amine\n\n'
+                  '📚  École — Spectacles, réunions\n\n'
+                  '🏥  Médical — RDV pédiatre, vaccins\n\n'
+                  '🎂  Famille — Anniversaires, sorties\n\n'
+                  '⚽  Activités — Sport, loisirs\n\n'
+                  'Tout le monde sait ce qui se passe, '
+                  'même quand Amine est en vol.',
+                  style: AppTextStyles.body.copyWith(
+                    height: 1.6,
+                    color: Colors.white70,
+                  ),
+                  textAlign: TextAlign.left,
+                ),
               ),
             ),
           ),
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: onStart,
-              icon: const Icon(Icons.rocket_launch),
-              label: const Text('C\'est parti !'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(color: AppColors.neonCyan.withValues(alpha: 0.3), blurRadius: 16, spreadRadius: -4),
+                ],
+              ),
+              child: ElevatedButton.icon(
+                onPressed: onStart,
+                icon: const Icon(Icons.rocket_launch),
+                label: const Text('C\'est parti !', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  backgroundColor: AppColors.cardDark,
+                  foregroundColor: AppColors.neonCyan,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(color: AppColors.neonCyan.withValues(alpha: 0.5)),
+                  ),
+                ),
               ),
             ),
           ),
