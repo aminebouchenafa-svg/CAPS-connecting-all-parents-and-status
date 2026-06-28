@@ -358,12 +358,12 @@ class _RosterCalendar extends ConsumerWidget {
                   const Divider(),
                   const SizedBox(height: 8),
 
-                  // Tasks
+                  // Rappels
                   Row(
                     children: [
                       Icon(Icons.checklist, size: 20, color: AppColors.primary),
                       const SizedBox(width: 8),
-                      Text('Tâches', style: AppTextStyles.bodyBold),
+                      Text('Rappels', style: AppTextStyles.bodyBold),
                     ],
                   ),
                   const SizedBox(height: 8),
@@ -389,7 +389,7 @@ class _RosterCalendar extends ConsumerWidget {
                         child: TextField(
                           controller: taskController,
                           decoration: InputDecoration(
-                            hintText: 'Ajouter une tâche...',
+                            hintText: 'Ex: Récupérer les enfants, RDV médecin...',
                             hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -727,10 +727,48 @@ class _HorizontalDayBlock extends StatelessWidget {
                         ),
                     ],
 
-                    // Note indicator
-                    if (note != null) ...[
+                    // Note & tasks indicator
+                    if (note != null || (tasks != null && tasks!.isNotEmpty)) ...[
                       const Spacer(),
-                      Icon(Icons.sticky_note_2, size: 12, color: color.withValues(alpha: 0.5)),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (note != null)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.amber.withValues(alpha: 0.3),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.sticky_note_2, size: 10, color: Colors.amber[800]),
+                                  const SizedBox(width: 2),
+                                  Text('Note', style: TextStyle(fontSize: 7, fontWeight: FontWeight.w700, color: Colors.amber[800])),
+                                ],
+                              ),
+                            ),
+                          if (note != null && tasks != null && tasks!.isNotEmpty)
+                            const SizedBox(width: 3),
+                          if (tasks != null && tasks!.isNotEmpty)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.checklist, size: 10, color: Colors.blue[700]),
+                                  const SizedBox(width: 2),
+                                  Text('${tasks!.length}', style: TextStyle(fontSize: 7, fontWeight: FontWeight.w700, color: Colors.blue[700])),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
                     ],
                   ],
                 ),
