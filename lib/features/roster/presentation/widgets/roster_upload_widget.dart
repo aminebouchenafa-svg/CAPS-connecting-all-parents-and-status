@@ -193,6 +193,8 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
       final roster = parser.parse(text);
 
       ref.read(rosterProvider.notifier).state = roster;
+      ref.read(rosterDebugProvider.notifier).state = parser.lastDebugInfo;
+      ref.read(rosterRawTextProvider.notifier).state = text;
 
       if (mounted) {
         Navigator.of(context).pop();

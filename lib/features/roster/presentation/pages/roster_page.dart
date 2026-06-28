@@ -169,7 +169,7 @@ class _RosterCalendar extends ConsumerWidget {
             children: [
               Expanded(
                 child: GestureDetector(
-                  onTap: () => _showTotalsAndCodes(context),
+                  onTap: () => _showTotalsAndCodes(context, ref),
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     decoration: BoxDecoration(
@@ -252,7 +252,9 @@ class _RosterCalendar extends ConsumerWidget {
     );
   }
 
-  void _showTotalsAndCodes(BuildContext context) {
+  void _showTotalsAndCodes(BuildContext context, WidgetRef ref) {
+    final debugInfo = ref.read(rosterDebugProvider);
+    final rawText = ref.read(rosterRawTextProvider);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -381,6 +383,52 @@ class _RosterCalendar extends ConsumerWidget {
                 )
               else
                 Text('Aucun code disponible', style: TextStyle(color: Colors.grey[400])),
+
+              // Debug parser info
+              if (debugInfo != null) ...[
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Icon(Icons.bug_report, size: 22, color: Colors.grey[600]),
+                    const SizedBox(width: 8),
+                    Text('DEBUG PARSER', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.grey[600])),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: SelectableText(
+                    debugInfo,
+                    style: const TextStyle(fontSize: 9, fontFamily: 'monospace', color: Colors.black87),
+                  ),
+                ),
+              ],
+              if (rawText != null) ...[
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Icon(Icons.text_snippet, size: 22, color: Colors.grey[600]),
+                    const SizedBox(width: 8),
+                    Text('TEXTE PDF BRUT', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.grey[600])),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: SelectableText(
+                    rawText,
+                    style: const TextStyle(fontSize: 8, fontFamily: 'monospace', color: Colors.black87),
+                  ),
+                ),
+              ],
 
               const SizedBox(height: 20),
             ],
