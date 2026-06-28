@@ -236,41 +236,51 @@ class RosterParser {
 
     // Step 3: Parse the activity row - map each token to a day index.
     // PDF extraction can split "//" → "/ /" and "/RH" → "/ RH".
-    // Try both merged and unmerged, pick the one matching day count best.
+    // Merge exactly the right number of pairs to match day count,
+    // preferring merges at end of month (where splits are most likely).
     final rawTokens = lines[activityRowIdx].trim().split(RegExp(r'\s+'));
 
-    int _countNonSkip(List<String> tokens) {
-      int c = 0;
-      for (final t in tokens) {
-        if (_dayOfWeek.hasMatch(t) || _monthAbbr.containsKey(t)) continue;
-        c++;
-      }
-      return c;
+    int rawNonSkipCount = 0;
+    for (final t in rawTokens) {
+      if (_dayOfWeek.hasMatch(t) || _monthAbbr.containsKey(t)) continue;
+      rawNonSkipCount++;
     }
-
-    List<String> _buildMerged(List<String> raw) {
-      final result = <String>[];
-      for (int i = 0; i < raw.length; i++) {
-        final t = raw[i];
-        if (t == '/' && i + 1 < raw.length) {
-          final next = raw[i + 1];
-          if (next == '/') { result.add('//'); i++; continue; }
-          if (next.toUpperCase() == 'RH') { result.add('/RH'); i++; continue; }
-        }
-        result.add(t);
-      }
-      return result;
-    }
-
-    final mergedTokens = _buildMerged(rawTokens);
-    final mergedCount = _countNonSkip(mergedTokens);
-    final rawCount = _countNonSkip(rawTokens);
+    final mergesNeeded = rawNonSkipCount > dayDates.length
+        ? rawNonSkipCount - dayDates.length
+        : 0;
 
     final List<String> actTokens;
-    if ((mergedCount - dayDates.length).abs() <= (rawCount - dayDates.length).abs()) {
-      actTokens = mergedTokens;
+    if (mergesNeeded > 0) {
+      // Find all positions where / is followed by / or RH
+      final mergePositions = <int>[];
+      for (int i = 0; i < rawTokens.length - 1; i++) {
+        if (rawTokens[i] == '/') {
+          final next = rawTokens[i + 1];
+          if (next == '/' || next.toUpperCase() == 'RH') {
+            mergePositions.add(i);
+          }
+        }
+      }
+      // Pick the last N mergeable positions (end-of-month splits most likely)
+      final useMerges = <int>{};
+      for (int i = mergePositions.length - 1;
+          i >= 0 && useMerges.length < mergesNeeded;
+          i--) {
+        useMerges.add(mergePositions[i]);
+      }
+      final result = <String>[];
+      for (int i = 0; i < rawTokens.length; i++) {
+        if (useMerges.contains(i) && i + 1 < rawTokens.length) {
+          final next = rawTokens[i + 1];
+          result.add(next == '/' ? '//' : '/RH');
+          i++;
+        } else {
+          result.add(rawTokens[i]);
+        }
+      }
+      actTokens = result;
     } else {
-      actTokens = rawTokens;
+      actTokens = List.of(rawTokens);
     }
 
     final dayActivities = <int, String>{};
