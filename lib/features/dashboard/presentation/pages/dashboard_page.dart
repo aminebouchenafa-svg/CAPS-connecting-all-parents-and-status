@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +9,7 @@ import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/theme/theme_provider.dart';
 import '../../domain/entities/flight_status.dart';
 import '../providers/flight_status_provider.dart';
+import '../../../kids/presentation/pages/kids_mode_page.dart';
 import '../../../roster/presentation/providers/roster_provider.dart';
 import '../../../roster/domain/entities/roster_duty.dart';
 import '../../../roster/data/roster_parser.dart';
@@ -64,8 +67,7 @@ class DashboardPage extends ConsumerWidget {
             ),
             tooltip: isDark ? 'Mode Clair' : 'Mode Sombre',
             onPressed: () {
-              ref.read(themeModeProvider.notifier).state =
-                  isDark ? ThemeMode.light : ThemeMode.dark;
+              ref.read(themeModeProvider.notifier).toggle();
             },
           ),
         ],
@@ -164,6 +166,8 @@ class _DashboardContent extends ConsumerWidget {
           _WeekPreview(roster: roster),
           const SizedBox(height: 16),
           _QuickStats(roster: roster),
+          const SizedBox(height: 16),
+          const _KidModeButton(),
           const SizedBox(height: 24),
         ],
       ),
@@ -308,7 +312,9 @@ class _TodayCard extends StatelessWidget {
           ],
           if (status.phase != FlightPhase.repos &&
               status.estimatedEndTime != null) ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
+            const Divider(height: 1),
+            const SizedBox(height: 20),
             _CountdownSection(
               targetTime: status.estimatedEndTime!,
               glowColor: glowColor,
@@ -435,7 +441,7 @@ class _TodayCard extends StatelessWidget {
       };
 }
 
-class _CountdownSection extends StatelessWidget {
+class _CountdownSection extends StatefulWidget {
   final DateTime targetTime;
   final Color glowColor;
 
@@ -445,65 +451,289 @@ class _CountdownSection extends StatelessWidget {
   });
 
   @override
+  State<_CountdownSection> createState() => _CountdownSectionState();
+}
+
+class _CountdownSectionState extends State<_CountdownSection>
+    with TickerProviderStateMixin {
+  Timer? _timer;
+  Duration _remaining = Duration.zero;
+
+  late AnimationController _glowController;
+  late Animation<double> _glowAnimation;
+
+  late AnimationController _arrivalController;
+  late Animation<double> _arrivalScale;
+
+  bool _hasArrived = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Pulsing glow animation
+    _glowController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
+
+    _glowAnimation = Tween<double>(begin: 0.3, end: 1.0).animate(
+      CurvedAnimation(parent: _glowController, curve: Curves.easeInOut),
+    );
+
+    // Arrival bounce animation
+    _arrivalController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _arrivalScale = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _arrivalController, curve: Curves.elasticOut),
+    );
+
+    _updateRemaining();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      _updateRemaining();
+    });
+  }
+
+  void _updateRemaining() {
+    final diff = widget.targetTime.difference(DateTime.now());
+    setState(() {
+      if (diff.isNegative || diff == Duration.zero) {
+        _remaining = Duration.zero;
+        if (!_hasArrived) {
+          _hasArrived = true;
+          _glowController.stop();
+          _arrivalController.forward();
+        }
+      } else {
+        _remaining = diff;
+        _hasArrived = false;
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant _CountdownSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.targetTime != widget.targetTime) {
+      _hasArrived = false;
+      _arrivalController.reset();
+      if (!_glowController.isAnimating) {
+        _glowController.repeat(reverse: true);
+      }
+      _updateRemaining();
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _glowController.dispose();
+    _arrivalController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final onSurface = Theme.of(context).colorScheme.onSurface;
-    final remaining = targetTime.difference(DateTime.now());
-    if (remaining.isNegative) {
-      return Text(
-        'Arrive bientot',
-        style: AppTextStyles.body.copyWith(color: glowColor),
+
+    if (_hasArrived) {
+      return ScaleTransition(
+        scale: _arrivalScale,
+        child: Column(
+          children: [
+            Container(
+              decoration: isDark
+                  ? BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.neonGreen.withValues(alpha: 0.5),
+                          blurRadius: 20,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    )
+                  : null,
+              child: Icon(
+                Icons.check_circle,
+                size: 48,
+                color: AppColors.neonGreen,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Papa est arrivé !',
+              style: AppTextStyles.heading2.copyWith(
+                color: AppColors.neonGreen,
+                shadows: isDark
+                    ? [Shadow(color: AppColors.neonGreen.withValues(alpha: 0.6), blurRadius: 8)]
+                    : null,
+              ),
+            ),
+          ],
+        ),
       );
     }
 
-    final hours = remaining.inHours;
-    final minutes = remaining.inMinutes % 60;
+    final hours = _remaining.inHours;
+    final minutes = _remaining.inMinutes % 60;
+    final seconds = _remaining.inSeconds % 60;
 
-    return Column(
-      children: [
-        Text(
-          'De retour dans',
-          style: AppTextStyles.caption.copyWith(
-            color: onSurface.withValues(alpha: 0.6),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+    return AnimatedBuilder(
+      animation: _glowAnimation,
+      builder: (context, child) {
+        return Column(
           children: [
-            _timeBlock(context, '${hours}h', glowColor, isDark),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Text(
-                ':',
-                style: AppTextStyles.heading1.copyWith(color: glowColor),
+            Text(
+              'Papa rentre dans',
+              style: AppTextStyles.heading3.copyWith(
+                color: isDark
+                    ? widget.glowColor
+                    : _darkenColor(widget.glowColor, 0.3),
+                fontWeight: FontWeight.w600,
+                shadows: isDark
+                    ? [
+                        Shadow(
+                          color: widget.glowColor.withValues(
+                            alpha: 0.4 * _glowAnimation.value,
+                          ),
+                          blurRadius: 6,
+                        ),
+                      ]
+                    : null,
               ),
             ),
-            _timeBlock(context, '${minutes}m', glowColor, isDark),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _buildTimeBlock(
+                  hours.toString().padLeft(2, '0'),
+                  'heures',
+                  isDark,
+                ),
+                _buildSeparator(isDark),
+                _buildTimeBlock(
+                  minutes.toString().padLeft(2, '0'),
+                  'minutes',
+                  isDark,
+                ),
+                _buildSeparator(isDark),
+                _buildTimeBlock(
+                  seconds.toString().padLeft(2, '0'),
+                  'secondes',
+                  isDark,
+                ),
+              ],
+            ),
           ],
-        ),
-      ],
+        );
+      },
     );
   }
 
-  Widget _timeBlock(BuildContext context, String value, Color color, bool isDark) {
+  Widget _buildTimeBlock(String value, String label, bool isDark) {
+    final color = isDark ? widget.glowColor : _darkenColor(widget.glowColor, 0.3);
+    final glowIntensity = _glowAnimation.value;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
+        color: widget.glowColor.withValues(alpha: isDark ? 0.1 : 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: widget.glowColor.withValues(
+            alpha: isDark ? 0.2 + 0.2 * glowIntensity : 0.25,
+          ),
+          width: 1.5,
+        ),
+        boxShadow: isDark
+            ? [
+                BoxShadow(
+                  color: widget.glowColor.withValues(alpha: 0.15 * glowIntensity),
+                  blurRadius: 12 * glowIntensity,
+                  spreadRadius: -2,
+                ),
+                BoxShadow(
+                  color: widget.glowColor.withValues(alpha: 0.08 * glowIntensity),
+                  blurRadius: 24 * glowIntensity,
+                  spreadRadius: -4,
+                ),
+              ]
+            : [
+                BoxShadow(
+                  color: widget.glowColor.withValues(alpha: 0.12),
+                  blurRadius: 6,
+                  spreadRadius: -1,
+                ),
+              ],
       ),
-      child: Text(
-        value,
-        style: AppTextStyles.heading1.copyWith(
-          color: color,
-          shadows: isDark
-              ? [Shadow(color: color.withValues(alpha: 0.6), blurRadius: 6)]
-              : null,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            value,
+            style: AppTextStyles.countdown.copyWith(
+              color: color,
+              shadows: isDark
+                  ? [
+                      Shadow(
+                        color: widget.glowColor.withValues(alpha: 0.7 * glowIntensity),
+                        blurRadius: 8,
+                      ),
+                    ]
+                  : null,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: AppTextStyles.caption.copyWith(
+              color: color.withValues(alpha: 0.7),
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSeparator(bool isDark) {
+    final color = isDark ? widget.glowColor : _darkenColor(widget.glowColor, 0.3);
+    final glowIntensity = _glowAnimation.value;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: Opacity(
+        opacity: 0.4 + 0.6 * glowIntensity,
+        child: Text(
+          ':',
+          style: AppTextStyles.countdown.copyWith(
+            color: color,
+            shadows: isDark
+                ? [
+                    Shadow(
+                      color: widget.glowColor.withValues(alpha: 0.6 * glowIntensity),
+                      blurRadius: 6,
+                    ),
+                  ]
+                : null,
+          ),
         ),
       ),
     );
+  }
+
+  /// Darken a color for light mode display
+  static Color _darkenColor(Color color, double amount) {
+    final hsl = HSLColor.fromColor(color);
+    return hsl
+        .withLightness((hsl.lightness - amount).clamp(0.0, 1.0))
+        .withSaturation((hsl.saturation * 0.85).clamp(0.0, 1.0))
+        .toColor();
   }
 }
 
@@ -892,6 +1122,81 @@ class _StatCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _KidModeButton extends StatelessWidget {
+  const _KidModeButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final buttonColor = AppColors.neonMagenta;
+
+    return Material(
+      color: isDark ? AppColors.cardDark : Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const KidsModePage(),
+            ),
+          );
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: buttonColor.withValues(alpha: isDark ? 0.3 : 0.2),
+            ),
+            boxShadow: isDark
+                ? [
+                    BoxShadow(
+                      color: buttonColor.withValues(alpha: 0.15),
+                      blurRadius: 12,
+                      spreadRadius: -2,
+                    ),
+                  ]
+                : [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.06),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.child_care,
+                size: 28,
+                color: buttonColor,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Mode Enfant 👶',
+                style: AppTextStyles.heading3.copyWith(
+                  color: buttonColor,
+                  shadows: isDark
+                      ? [
+                          Shadow(
+                            color: buttonColor.withValues(alpha: 0.6),
+                            blurRadius: 6,
+                          ),
+                        ]
+                      : null,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

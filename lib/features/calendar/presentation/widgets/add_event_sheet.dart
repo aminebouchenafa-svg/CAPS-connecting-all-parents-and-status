@@ -9,9 +9,7 @@ import '../../domain/entities/calendar_event.dart';
 import '../providers/calendar_provider.dart';
 
 class AddEventSheet extends ConsumerStatefulWidget {
-  final String householdId;
-
-  const AddEventSheet({super.key, required this.householdId});
+  const AddEventSheet({super.key});
 
   @override
   ConsumerState<AddEventSheet> createState() => _AddEventSheetState();
@@ -21,10 +19,17 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   EventType _selectedType = EventType.family;
-  DateTime _startDate = DateTime.now();
-  DateTime _endDate = DateTime.now().add(const Duration(hours: 1));
+  late DateTime _startDate;
+  late DateTime _endDate;
   bool _isAllDay = false;
-  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _startDate = DateTime(now.year, now.month, now.day, now.hour + 1);
+    _endDate = _startDate.add(const Duration(hours: 1));
+  }
 
   @override
   void dispose() {
@@ -74,7 +79,7 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
     });
   }
 
-  Future<void> _save() async {
+  void _save() {
     if (_titleController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Le titre est obligatoire')),
@@ -82,11 +87,9 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
       return;
     }
 
-    setState(() => _isSaving = true);
-
     final event = CalendarEvent(
       id: const Uuid().v4(),
-      householdId: widget.householdId,
+      householdId: DemoData.householdId,
       createdByUid: DemoData.pilot.uid,
       title: _titleController.text.trim(),
       description: _descriptionController.text.trim().isNotEmpty
@@ -99,24 +102,15 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
       createdAt: DateTime.now(),
     );
 
-    final result =
-        await ref.read(calendarRepositoryProvider).addEvent(event);
-
-    if (!mounted) return;
-
-    result.when(
-      success: (_) => Navigator.of(context).pop(),
-      failure: (failure) {
-        setState(() => _isSaving = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(failure.message)),
-        );
-      },
-    );
+    ref.read(calendarEventsNotifierProvider.notifier).addEvent(event);
+    Navigator.of(context).pop();
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+
     return Padding(
       padding: EdgeInsets.only(
         left: 24,
@@ -129,59 +123,93 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Nouvel événement', style: AppTextStyles.heading2),
+            // Header
+            Text(
+              'Nouvel événement',
+              style: AppTextStyles.heading2.copyWith(
+                color: isDark ? AppColors.neonCyan : onSurface,
+              ),
+            ),
             const SizedBox(height: 20),
+
+            // Title field
             TextField(
               controller: _titleController,
-              decoration: const InputDecoration(
+              style: TextStyle(color: onSurface),
+              decoration: InputDecoration(
                 labelText: 'Titre',
-                prefixIcon: Icon(Icons.title),
-                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.title, color: onSurface.withValues(alpha: 0.6)),
+                border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 12),
+
+            // Description field
             TextField(
               controller: _descriptionController,
               maxLines: 2,
-              decoration: const InputDecoration(
+              style: TextStyle(color: onSurface),
+              decoration: InputDecoration(
                 labelText: 'Description (optionnel)',
-                prefixIcon: Icon(Icons.notes),
-                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.notes, color: onSurface.withValues(alpha: 0.6)),
+                border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 16),
-            Text('Type', style: AppTextStyles.heading3),
+
+            // Event type selector
+            Text(
+              'Type',
+              style: AppTextStyles.heading3.copyWith(color: onSurface),
+            ),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: EventType.values.map((type) {
+              children: EventType.values
+                  .where((t) => t != EventType.rotation) // rotation is roster-only
+                  .map((type) {
                 final isSelected = type == _selectedType;
+                final color = _eventColor(type);
                 return ChoiceChip(
+                  avatar: Icon(_eventIcon(type), size: 16, color: isSelected ? color : onSurface.withValues(alpha: 0.5)),
                   label: Text(type.label),
                   selected: isSelected,
-                  selectedColor: _eventColor(type).withValues(alpha: 0.2),
+                  selectedColor: color.withValues(alpha: isDark ? 0.25 : 0.15),
+                  labelStyle: TextStyle(
+                    color: isSelected ? color : onSurface.withValues(alpha: 0.7),
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                  ),
+                  side: isSelected
+                      ? BorderSide(color: color.withValues(alpha: 0.5))
+                      : null,
                   onSelected: (_) => setState(() => _selectedType = type),
                 );
               }).toList(),
             ),
             const SizedBox(height: 16),
+
+            // All-day toggle
             SwitchListTile(
-              title: const Text('Toute la journée'),
+              title: Text('Toute la journée', style: TextStyle(color: onSurface)),
               value: _isAllDay,
+              activeColor: isDark ? AppColors.neonCyan : Theme.of(context).colorScheme.primary,
               onChanged: (val) => setState(() => _isAllDay = val),
               contentPadding: EdgeInsets.zero,
             ),
             const SizedBox(height: 8),
+
+            // Date/time pickers
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () => _pickDateTime(isStart: true),
-                    icon: const Icon(Icons.play_arrow, size: 18),
+                    icon: Icon(Icons.play_arrow, size: 18,
+                        color: isDark ? AppColors.neonGreen : null),
                     label: Text(
                       _formatDateTime(_startDate),
-                      style: const TextStyle(fontSize: 12),
+                      style: TextStyle(fontSize: 12, color: onSurface),
                     ),
                   ),
                 ),
@@ -189,25 +217,28 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () => _pickDateTime(isStart: false),
-                    icon: const Icon(Icons.stop, size: 18),
+                    icon: Icon(Icons.stop, size: 18,
+                        color: isDark ? AppColors.neonRed : null),
                     label: Text(
                       _formatDateTime(_endDate),
-                      style: const TextStyle(fontSize: 12),
+                      style: TextStyle(fontSize: 12, color: onSurface),
                     ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 24),
+
+            // Save button
             ElevatedButton(
-              onPressed: _isSaving ? null : _save,
-              child: _isSaving
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Ajouter'),
+              onPressed: _save,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: isDark ? AppColors.neonCyan : Theme.of(context).colorScheme.primary,
+                foregroundColor: isDark ? AppColors.backgroundDark : Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Ajouter'),
             ),
           ],
         ),
@@ -222,10 +253,18 @@ class _AddEventSheetState extends ConsumerState<AddEventSheet> {
   }
 
   Color _eventColor(EventType type) => switch (type) {
-        EventType.rotation => AppColors.statusEnVol,
-        EventType.family => AppColors.accent,
-        EventType.school => AppColors.info,
-        EventType.medical => AppColors.error,
-        EventType.activity => AppColors.success,
+        EventType.rotation => AppColors.neonCyan,
+        EventType.family => AppColors.neonMagenta,
+        EventType.school => AppColors.neonPurple,
+        EventType.medical => AppColors.neonRed,
+        EventType.activity => AppColors.neonGreen,
+      };
+
+  IconData _eventIcon(EventType type) => switch (type) {
+        EventType.rotation => Icons.flight,
+        EventType.family => Icons.family_restroom,
+        EventType.school => Icons.school,
+        EventType.medical => Icons.local_hospital,
+        EventType.activity => Icons.sports_soccer,
       };
 }

@@ -192,9 +192,9 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
       final parser = ref.read(rosterParserProvider);
       final roster = parser.parse(text);
 
-      ref.read(rosterProvider.notifier).state = roster;
+      ref.read(rosterProvider.notifier).update(roster);
       ref.read(rosterDebugProvider.notifier).state = parser.lastDebugInfo;
-      ref.read(rosterRawTextProvider.notifier).state = text;
+      ref.read(rosterRawTextProvider.notifier).update(text);
 
       if (mounted) {
         Navigator.of(context).pop();
@@ -224,7 +224,7 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
   }
 
   void _loadDemoRoster() {
-    ref.read(rosterProvider.notifier).state = DemoData.demoRoster;
+    ref.read(rosterProvider.notifier).update(DemoData.demoRoster);
     Navigator.of(context).pop();
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(

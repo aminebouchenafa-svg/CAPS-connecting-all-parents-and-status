@@ -60,9 +60,7 @@ class RosterPage extends ConsumerWidget {
             tooltip: isDark ? 'Mode Clair' : 'Mode Sombre',
             color: isDark ? AppColors.neonYellow : Colors.blueGrey,
             onPressed: () {
-              final current = ref.read(themeModeProvider);
-              ref.read(themeModeProvider.notifier).state =
-                  current == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+              ref.read(themeModeProvider.notifier).toggle();
             },
           ),
           if (roster != null) ...[
@@ -208,7 +206,7 @@ class RosterPage extends ConsumerWidget {
       ),
     );
     if (confirm == true) {
-      ref.read(rosterProvider.notifier).state = null;
+      ref.read(rosterProvider.notifier).update(null);
     }
   }
 
@@ -1091,15 +1089,15 @@ class _RosterCalendar extends ConsumerWidget {
                         final cn = Map<String, String>.from(ref.read(dutyNotesProvider));
                         final noteText = noteController.text.trim();
                         if (noteText.isEmpty) { cn.remove(noteKey); } else { cn[noteKey] = noteText; }
-                        ref.read(dutyNotesProvider.notifier).state = cn;
+                        ref.read(dutyNotesProvider.notifier).update(cn);
 
                         final ct = Map<String, List<Map<String, dynamic>>>.from(ref.read(dutyTasksProvider));
                         if (localTasks.isEmpty) { ct.remove(noteKey); } else { ct[noteKey] = localTasks; }
-                        ref.read(dutyTasksProvider.notifier).state = ct;
+                        ref.read(dutyTasksProvider.notifier).update(ct);
 
                         final cc = Map<String, int>.from(ref.read(dutyColorsProvider));
                         if (selectedColorIndex == null) { cc.remove(noteKey); } else { cc[noteKey] = selectedColorIndex!; }
-                        ref.read(dutyColorsProvider.notifier).state = cc;
+                        ref.read(dutyColorsProvider.notifier).update(cc);
 
                         Navigator.pop(ctx);
                       },

@@ -2,10 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/services/storage_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 
-final hasSeenOnboardingProvider = StateProvider<bool>((ref) => false);
+final hasSeenOnboardingProvider =
+    StateNotifierProvider<HasSeenOnboardingNotifier, bool>((ref) {
+  return HasSeenOnboardingNotifier();
+});
+
+class HasSeenOnboardingNotifier extends StateNotifier<bool> {
+  HasSeenOnboardingNotifier() : super(StorageService.getOnboardingSeen());
+
+  void markSeen() {
+    state = true;
+    StorageService.saveOnboardingSeen(true);
+  }
+}
 
 class WelcomePage extends ConsumerWidget {
   const WelcomePage({super.key});
@@ -62,7 +75,7 @@ class WelcomePage extends ConsumerWidget {
             ),
             _LastSlide(
               onStart: () {
-                ref.read(hasSeenOnboardingProvider.notifier).state = true;
+                ref.read(hasSeenOnboardingProvider.notifier).markSeen();
                 context.go('/');
               },
             ),
