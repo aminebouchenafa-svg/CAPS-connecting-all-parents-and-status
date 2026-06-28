@@ -377,7 +377,7 @@ class RosterParser {
     // numbers and routes which are the critical data.
     final flightTimes = <int, ({String checkIn, String checkOut})>{};
 
-    // Step 8: Extract 2nd-leg flight numbers
+    // Step 8: Extract extra flight rows (2nd legs, 3rd legs, etc.)
     final extraFlightRows = <List<String>>[];
     for (final dl in dataLines) {
       final tokens = dl.split(RegExp(r'\s+'));
@@ -396,43 +396,47 @@ class RosterParser {
       }
     }
 
-    // Match 2nd-leg flights to flight days by route continuity:
-    // The 2nd leg's departure must equal the 1st leg's arrival.
-    // Not every flight day has a 2nd leg (e.g. inbound flights
-    // arriving at base have no return leg).
+    // Match extra legs by route continuity across all tiers:
+    //   2nd-leg departure == 1st-leg arrival
+    //   3rd-leg departure == 2nd-leg arrival
+    //   etc.
+    // Airport rows alternate dep/arr per tier:
+    //   [0]=1st dep, [1]=1st arr, [2]=2nd dep, [3]=2nd arr, ...
     final extraLegs = <int, List<({String fn, String? dep, String? arr})>>{};
-    if (extraFlightRows.isNotEmpty) {
-      final efRow = extraFlightRows[0];
+    for (int r = 0; r < extraFlightRows.length; r++) {
+      final row = extraFlightRows[r];
 
-      List<String>? dep2, arr2;
-      if (airportRows.length >= 4) {
-        dep2 = airportRows[2];
-        arr2 = airportRows[3];
-      }
+      final depRowIdx = 2 + r * 2;
+      final arrRowIdx = 3 + r * 2;
+      final depN = depRowIdx < airportRows.length ? airportRows[depRowIdx] : null;
+      final arrN = arrRowIdx < airportRows.length ? airportRows[arrRowIdx] : null;
 
       final matched = <int>{};
-      for (int i = 0; i < efRow.length; i++) {
-        final d2 = dep2 != null && i < dep2.length ? dep2[i] : null;
-        final a2 = arr2 != null && i < arr2.length ? arr2[i] : null;
+      for (int i = 0; i < row.length; i++) {
+        final dN = depN != null && i < depN.length ? depN[i] : null;
+        final aN = arrN != null && i < arrN.length ? arrN[i] : null;
 
-        int? matchedIdx;
-        if (d2 != null) {
-          // Find first unmatched flight day whose arrival == this departure
-          for (final fi in flightDayIndices) {
-            if (matched.contains(fi)) continue;
-            final route = flightRoutes[fi];
-            if (route != null && route.arr == d2) {
-              matchedIdx = fi;
-              break;
+        if (dN == null) continue;
+
+        for (final fi in flightDayIndices) {
+          if (matched.contains(fi)) continue;
+
+          String? prevArr;
+          if (r == 0) {
+            prevArr = flightRoutes[fi]?.arr;
+          } else {
+            final legs = extraLegs[fi];
+            if (legs != null && legs.length >= r) {
+              prevArr = legs[r - 1].arr;
             }
           }
-        }
 
-        if (matchedIdx != null) {
-          matched.add(matchedIdx);
-          extraLegs[matchedIdx] = [
-            (fn: efRow[i], dep: d2, arr: a2)
-          ];
+          if (prevArr == dN) {
+            matched.add(fi);
+            extraLegs.putIfAbsent(fi, () => []);
+            extraLegs[fi]!.add((fn: row[i], dep: dN, arr: aN));
+            break;
+          }
         }
       }
     }
@@ -510,11 +514,16 @@ class RosterParser {
       final fn = dayActivities[fi] ?? '?';
       debugSb.writeln('  Day ${date?.day} $fn: ${route?.dep ?? "?"} → ${route?.arr ?? "?"}');
     }
-    debugSb.writeln('2nd legs: ${extraLegs.length}');
+    debugSb.writeln('Extra flight rows: ${extraFlightRows.length}');
+    for (int r = 0; r < extraFlightRows.length; r++) {
+      debugSb.writeln('  Tier ${r + 2} (${extraFlightRows[r].length}): ${extraFlightRows[r].join(" ")}');
+    }
+    debugSb.writeln('Extra legs mapped: ${extraLegs.length} days');
     for (final e in extraLegs.entries) {
       final date = e.key < dayDates.length ? dayDates[e.key] : null;
-      for (final leg in e.value) {
-        debugSb.writeln('  Day ${date?.day} ${leg.fn}: ${leg.dep ?? "?"} → ${leg.arr ?? "?"}');
+      for (int l = 0; l < e.value.length; l++) {
+        final leg = e.value[l];
+        debugSb.writeln('  Day ${date?.day} leg${l + 2} ${leg.fn}: ${leg.dep ?? "?"} → ${leg.arr ?? "?"}');
       }
     }
     debugSb.writeln('Flights detected: ${duties.where((d) => d.isFlight).length}');
@@ -900,8 +909,11 @@ class RosterParser {
   // ── AvioDev helpers ──
 
   static DutyType _avioDevType(String code) {
-    if (['/', '/RH', '//', 'RH', 'OFF', 'DO', 'JA'].contains(code)) {
+    if (['/', 'OFF', 'DO', 'JA'].contains(code)) {
       return DutyType.off;
+    }
+    if (['/RH', '//', 'RH'].contains(code)) {
+      return DutyType.rest;
     }
     if (code == 'ESIM') return DutyType.simulator;
     if (['ING1', 'ING2', 'ING3', 'ING4', 'ING5', 'INST'].contains(code)) {
@@ -917,13 +929,14 @@ class RosterParser {
 
   static String _avioDevLabel(String code) {
     return switch (code) {
-      '/' || '//' => 'OFF',
+      '/' => 'OFF',
+      '//' => 'Repos post-courrier',
       '/RH' || 'RH' => 'Repos Hebdomadaire',
       'OFF' || 'DO' || 'JA' => 'OFF',
       'ESIM' => 'Simulateur',
       'ING1' || 'ING2' || 'ING3' || 'ING4' || 'ING5' => 'Formation',
-      'ARRT' => 'Arrêt',
-      'DEPL' => 'Déplacement',
+      'ARRT' => 'Arrivée tardive',
+      'DEPL' => 'Mission',
       'ABS' => 'Absence',
       'HS' => 'Hors Service',
       'INST' => 'Instruction',
