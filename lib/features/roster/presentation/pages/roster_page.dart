@@ -790,6 +790,9 @@ class _RosterCalendar extends ConsumerWidget {
                       child: _dutyDetailCard(ctx, duty),
                     )),
 
+                  if (duties.any((d) => d.isFlight))
+                    _serviceTimesDetail(ctx, duties.where((d) => d.isFlight).toList()),
+
                   const SizedBox(height: 16),
 
                   Row(
@@ -1114,6 +1117,120 @@ class _RosterCalendar extends ConsumerWidget {
     );
   }
 
+  Widget _serviceTimesDetail(BuildContext ctx, List<RosterDuty> flights) {
+    final isDark = Theme.of(ctx).brightness == Brightness.dark;
+    final onSurface = Theme.of(ctx).colorScheme.onSurface;
+
+    final firstDep = flights
+        .where((f) => f.checkIn != null)
+        .map((f) => f.checkIn!)
+        .fold<DateTime?>(null, (prev, t) => prev == null || t.isBefore(prev) ? t : prev);
+    final lastArr = flights
+        .where((f) => f.checkOut != null)
+        .map((f) => f.checkOut!)
+        .fold<DateTime?>(null, (prev, t) => prev == null || t.isAfter(prev) ? t : prev);
+
+    if (firstDep == null && lastArr == null) return const SizedBox.shrink();
+
+    final serviceStart = firstDep?.subtract(const Duration(hours: 1));
+    final serviceEnd = lastArr?.add(const Duration(minutes: 30));
+    final totalService = serviceStart != null && serviceEnd != null
+        ? serviceEnd.difference(serviceStart)
+        : null;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8, bottom: 4),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.neonOrange.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.neonOrange.withValues(alpha: 0.3)),
+        boxShadow: isDark
+            ? [BoxShadow(color: AppColors.neonOrange.withValues(alpha: 0.1), blurRadius: 8)]
+            : [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 6)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.timer_outlined, size: 18, color: AppColors.neonOrange),
+              const SizedBox(width: 8),
+              Text(
+                'Temps de service',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: isDark ? AppColors.neonOrange : const Color(0xFFE65100),
+                  shadows: isDark ? [Shadow(color: AppColors.neonOrange.withValues(alpha: 0.5), blurRadius: 4)] : [],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (serviceStart != null)
+            Row(
+              children: [
+                Icon(Icons.login, size: 16, color: isDark ? AppColors.neonGreen : const Color(0xFF2E7D32)),
+                const SizedBox(width: 8),
+                Text('Prise de service', style: TextStyle(fontSize: 13, color: onSurface.withValues(alpha: 0.7))),
+                const Spacer(),
+                Text(
+                  _fmtTime(serviceStart),
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? AppColors.neonGreen : const Color(0xFF2E7D32),
+                    shadows: isDark ? [Shadow(color: AppColors.neonGreen.withValues(alpha: 0.5), blurRadius: 4)] : [],
+                  ),
+                ),
+              ],
+            ),
+          if (serviceEnd != null) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Icon(Icons.logout, size: 16, color: isDark ? AppColors.neonRed : const Color(0xFFC62828)),
+                const SizedBox(width: 8),
+                Text('Fin de service', style: TextStyle(fontSize: 13, color: onSurface.withValues(alpha: 0.7))),
+                const Spacer(),
+                Text(
+                  _fmtTime(serviceEnd),
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? AppColors.neonRed : const Color(0xFFC62828),
+                    shadows: isDark ? [Shadow(color: AppColors.neonRed.withValues(alpha: 0.5), blurRadius: 4)] : [],
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (totalService != null) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Icon(Icons.hourglass_bottom, size: 16, color: isDark ? AppColors.neonYellow : const Color(0xFFF57F17)),
+                const SizedBox(width: 8),
+                Text('Durée totale', style: TextStyle(fontSize: 13, color: onSurface.withValues(alpha: 0.7))),
+                const Spacer(),
+                Text(
+                  '${totalService.inHours}h${(totalService.inMinutes % 60).toString().padLeft(2, '0')}',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? AppColors.neonYellow : const Color(0xFFF57F17),
+                    shadows: isDark ? [Shadow(color: AppColors.neonYellow.withValues(alpha: 0.5), blurRadius: 4)] : [],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _dutyDetailCard(BuildContext ctx, RosterDuty duty) {
     final isDark = Theme.of(ctx).brightness == Brightness.dark;
     final onSurface = Theme.of(ctx).colorScheme.onSurface;
@@ -1401,6 +1518,7 @@ class _HorizontalDayBlock extends StatelessWidget {
                           ],
                         ),
                       )),
+                      _buildServiceTimes(flights, color, onSurface, isDark),
                     ] else if (duties.isNotEmpty && duties.first.type == DutyType.standby) ...[
                       const SizedBox(height: 6),
                       Icon(Icons.access_time, size: 24, color: color),
@@ -1498,6 +1616,73 @@ class _HorizontalDayBlock extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildServiceTimes(List<RosterDuty> flights, Color color, Color onSurface, bool isDark) {
+    final firstDep = flights
+        .where((f) => f.checkIn != null)
+        .map((f) => f.checkIn!)
+        .fold<DateTime?>(null, (prev, t) => prev == null || t.isBefore(prev) ? t : prev);
+    final lastArr = flights
+        .where((f) => f.checkOut != null)
+        .map((f) => f.checkOut!)
+        .fold<DateTime?>(null, (prev, t) => prev == null || t.isAfter(prev) ? t : prev);
+
+    if (firstDep == null && lastArr == null) return const SizedBox.shrink();
+
+    final serviceStart = firstDep?.subtract(const Duration(hours: 1));
+    final serviceEnd = lastArr?.add(const Duration(minutes: 30));
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 6),
+      decoration: BoxDecoration(
+        color: isDark
+            ? AppColors.neonOrange.withValues(alpha: 0.1)
+            : AppColors.neonOrange.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.neonOrange.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        children: [
+          if (serviceStart != null)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.login, size: 11, color: AppColors.neonGreen),
+                const SizedBox(width: 3),
+                Text(
+                  _fmtTime(serviceStart),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? AppColors.neonGreen : const Color(0xFF2E7D32),
+                  ),
+                ),
+              ],
+            ),
+          if (serviceEnd != null) ...[
+            const SizedBox(height: 2),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.logout, size: 11, color: AppColors.neonRed),
+                const SizedBox(width: 3),
+                Text(
+                  _fmtTime(serviceEnd),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? AppColors.neonRed : const Color(0xFFC62828),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
       ),
     );
   }
