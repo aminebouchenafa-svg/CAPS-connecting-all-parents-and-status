@@ -20,6 +20,14 @@ const _availableColors = <String, Color>{
   'Rose': Color(0xFFE91E63),
   'Gris': Color(0xFF95A5A6),
   'Turquoise': Color(0xFF1ABC9C),
+  'Jaune': Color(0xFFF1C40F),
+  'Bleu foncé': Color(0xFF2C3E50),
+  'Lime': Color(0xFF2ECC71),
+  'Indigo': Color(0xFF3F51B5),
+  'Marron': Color(0xFF795548),
+  'Cyan': Color(0xFF00BCD4),
+  'Corail': Color(0xFFFF7043),
+  'Doré': Color(0xFFFFB300),
 };
 
 class RosterPage extends ConsumerWidget {
@@ -911,11 +919,13 @@ class _RosterCalendar extends ConsumerWidget {
 
   static Color _colorForCode(String code) {
     final upper = code.toUpperCase();
-    if (['/RH', '//', 'RH'].contains(upper)) return const Color(0xFF27AE60);
+    if (['/RH', '//', 'RH', '#'].contains(upper)) return const Color(0xFF27AE60);
     if (['/', 'OFF', 'DO', 'JA'].contains(upper)) return const Color(0xFFE74C3C);
-    if (['ING1', 'ING2', 'ING3', 'ING4', 'ING5', 'ESIM', 'INST'].contains(upper)) return const Color(0xFF8E44AD);
+    if (['CGET'].contains(upper)) return const Color(0xFFF1C40F);
+    if (['ING1', 'ING2', 'ING3', 'ING4', 'ING5', 'ENG1', 'ENG2', 'ENG3', 'ENG4', 'ENG5', 'ESIM', 'INST'].contains(upper)) return const Color(0xFF8E44AD);
+    if (['GRTS', 'ESTG', 'ESSP', 'ELRN', 'BFGS', 'BFGE', 'CONV'].contains(upper)) return const Color(0xFF3F51B5);
     if (['HS', 'SBY', 'STBY', 'STANDBY'].contains(upper)) return const Color(0xFFF39C12);
-    if (['ARRT', 'DEPL'].contains(upper)) return const Color(0xFFF39C12);
+    if (['ARRT', 'DEPL'].contains(upper)) return const Color(0xFFFF7043);
     if (['ABS', 'C/O', 'REPOS', 'REST'].contains(upper)) return const Color(0xFF27AE60);
     return const Color(0xFF95A5A6);
   }
@@ -923,11 +933,13 @@ class _RosterCalendar extends ConsumerWidget {
   static Color _colorForDuty(RosterDuty duty) {
     if (duty.isFlight) return const Color(0xFF2980B9);
     final code = duty.activityCode?.toUpperCase() ?? '';
-    if (['/RH', '//', 'RH'].contains(code)) return const Color(0xFF27AE60);
+    if (['/RH', '//', 'RH', '#'].contains(code)) return const Color(0xFF27AE60);
     if (['/', 'OFF', 'DO', 'JA'].contains(code)) return const Color(0xFFE74C3C);
-    if (['ING1', 'ING2', 'ING3', 'ING4', 'ING5', 'ESIM', 'INST'].contains(code)) return const Color(0xFF8E44AD);
+    if (['CGET'].contains(code)) return const Color(0xFFF1C40F);
+    if (['ING1', 'ING2', 'ING3', 'ING4', 'ING5', 'ENG1', 'ENG2', 'ENG3', 'ENG4', 'ENG5', 'ESIM', 'INST'].contains(code)) return const Color(0xFF8E44AD);
+    if (['GRTS', 'ESTG', 'ESSP', 'ELRN', 'BFGS', 'BFGE', 'CONV'].contains(code)) return const Color(0xFF3F51B5);
     if (['HS', 'SBY', 'STBY', 'STANDBY'].contains(code)) return const Color(0xFFF39C12);
-    if (['ARRT', 'DEPL'].contains(code)) return const Color(0xFFF39C12);
+    if (['ARRT', 'DEPL'].contains(code)) return const Color(0xFFFF7043);
     if (['ABS', 'C/O', 'REPOS', 'REST'].contains(code)) return const Color(0xFF27AE60);
     return switch (duty.type) {
       DutyType.flight => const Color(0xFF2980B9),

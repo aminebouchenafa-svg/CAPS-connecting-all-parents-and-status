@@ -45,6 +45,9 @@ class RosterParser {
     'ESIM', 'ING1', 'ING2', 'ING3', 'ING4', 'ING5',
     'ARRT', 'DEPL', 'ABS', 'HS', 'INST', 'C/O',
     'SBY', 'STBY', 'STANDBY', 'REPOS', 'REST',
+    'CGET', 'GRTS', 'ESTG', 'ENG2', 'ESSP', '#',
+    'ENG1', 'ENG3', 'ENG4', 'ENG5',
+    'ELRN', 'BFGS', 'BFGE', 'CONV',
   };
 
   String? lastExtractedText;
@@ -62,10 +65,10 @@ class RosterParser {
     final stats = _parseStats(text);
     final duties = _parseDuties(text, period.$1);
     final allStats = _parseAllStats(text);
-    var codeExplanations = _parseCodeExplanations(text);
-    if (codeExplanations.isEmpty) {
-      codeExplanations = _buildFallbackCodeExplanations(duties);
-    }
+    final parsedExplanations = _parseCodeExplanations(text);
+    final fallbackExplanations = _buildFallbackCodeExplanations(duties);
+    // Merge: parsed descriptions take priority, fallback fills gaps
+    final codeExplanations = <String, String>{...fallbackExplanations, ...parsedExplanations};
 
     return Roster(
       pilotName: pilotName,
@@ -445,7 +448,7 @@ class RosterParser {
     // Map check-in/check-out times to timed activity days.
     // Timed = flights, HS, SBY, ING*, ESIM, INST
     // Excluded: off/rest codes + ARRT/DEPL (no scheduled times in PDF)
-    const _noTimeCodes = {'/', '/RH', '//', 'RH', 'OFF', 'DO', 'JA', 'ABS', 'C/O', 'REPOS', 'REST', 'ARRT', 'DEPL'};
+    const _noTimeCodes = {'/', '/RH', '//', 'RH', 'OFF', 'DO', 'JA', 'ABS', 'C/O', 'REPOS', 'REST', 'ARRT', 'DEPL', '#', 'CGET'};
     final timedDayIndices = <int>[];
     for (int di = 0; di < dayDates.length; di++) {
       final act = dayActivities[di];
@@ -1041,15 +1044,20 @@ class RosterParser {
     if (['/', 'OFF', 'DO', 'JA'].contains(code)) {
       return DutyType.off;
     }
-    if (['/RH', '//', 'RH'].contains(code)) {
+    if (['/RH', '//', 'RH', '#'].contains(code)) {
       return DutyType.rest;
     }
     if (code == 'ESIM') return DutyType.simulator;
-    if (['ING1', 'ING2', 'ING3', 'ING4', 'ING5', 'INST'].contains(code)) {
+    if (['ING1', 'ING2', 'ING3', 'ING4', 'ING5', 'INST',
+         'ENG1', 'ENG2', 'ENG3', 'ENG4', 'ENG5'].contains(code)) {
+      return DutyType.training;
+    }
+    if (['GRTS', 'ESTG', 'ESSP', 'ELRN', 'BFGS', 'BFGE', 'CONV'].contains(code)) {
       return DutyType.training;
     }
     if (['SBY', 'STBY', 'STANDBY', 'HS'].contains(code)) return DutyType.standby;
     if (['ARRT', 'DEPL'].contains(code)) return DutyType.deadhead;
+    if (['CGET'].contains(code)) return DutyType.off;
     if (['ABS', 'C/O', 'REPOS', 'REST'].contains(code)) {
       return DutyType.rest;
     }
@@ -1060,14 +1068,28 @@ class RosterParser {
     return switch (code) {
       '/' => 'Sans activité programmée',
       '//' => 'Repos post-courrier',
+      '#' => 'Repos pré-courrier',
       '/RH' || 'RH' => 'Repos Hebdomadaire',
       'OFF' || 'DO' || 'JA' => 'OFF',
+      'CGET' => 'Congé Été',
       'ESIM' => 'Simulateur à l\'Etranger',
       'ING1' => 'Simu NG Kouba 04:30 UTC',
       'ING2' => 'Simu NG Kouba',
       'ING3' => 'Simu NG Kouba 13:00 UTC',
       'ING4' => 'Simu NG Kouba',
       'ING5' => 'Simu NG Kouba 08:45 UTC',
+      'ENG1' => 'Simu NG Kouba - Élève',
+      'ENG2' => 'Simu NG Kouba - Élève',
+      'ENG3' => 'Simu NG Kouba - Élève',
+      'ENG4' => 'Simu NG Kouba - Élève',
+      'ENG5' => 'Simu NG Kouba - Élève',
+      'GRTS' => 'E-learn Ground Refresh Training Summer',
+      'ESTG' => 'Briefing simulateur - Élève PNT',
+      'ESSP' => 'E-learn sécurité & sauvetage théorique',
+      'ELRN' => 'E-learning',
+      'BFGS' => 'Briefing simulateur',
+      'BFGE' => 'Briefing Élève',
+      'CONV' => 'Conversion',
       'ARRT' => 'Arrivée tardive',
       'DEPL' => 'Mission',
       'ABS' => 'Absence',
@@ -1175,37 +1197,85 @@ class RosterParser {
   Map<String, String> _parseCodeExplanations(String text) {
     final codes = <String, String>{};
 
-    // Try multiple section headers
+    // Find the CODE EXPLANATIONS section - try multiple header patterns
     final sectionPatterns = [
+      RegExp(r'CODE\s*EXPLANATION[S]?\s*\n(.*?)(?=\nTOTALS|\nOTHER\s+TRAINING|\nPage\s+\d|$)', dotAll: true, caseSensitive: false),
+      RegExp(r'CODE\s*\|\s*DESCRIPTION\s*\n(.*?)(?=\nTOTALS|\nOTHER\s+TRAINING|\nPage\s+\d|$)', dotAll: true, caseSensitive: false),
       RegExp(r'CODE\s*EXPLANATION[S]?(.*?)(?:TOTALS|OTHER\s+TRAINING|Page\s+\d|$)', dotAll: true, caseSensitive: false),
-      RegExp(r'CODE\s*DESCRIPTION(.*?)(?:TOTALS|OTHER\s+TRAINING|Page\s+\d|$)', dotAll: true, caseSensitive: false),
       RegExp(r'CODE\s*\|\s*DESCRIPTION(.*?)(?:TOTALS|OTHER\s+TRAINING|Page\s+\d|$)', dotAll: true, caseSensitive: false),
     ];
 
     String? block;
     for (final pattern in sectionPatterns) {
       final section = pattern.firstMatch(text);
-      if (section != null) {
+      if (section != null && section.group(1)!.trim().isNotEmpty) {
         block = section.group(1)!;
         break;
       }
     }
 
     if (block != null) {
-      // Try pipe-separated format: CODE | DESCRIPTION
-      final pipeMatches = RegExp(r'(\S+)\s*\|\s*(.+?)(?=\n|\s{2,}\S+\s*\||$)')
-          .allMatches(block);
-      for (final m in pipeMatches) {
-        final code = m.group(1)!.trim();
-        final desc = m.group(2)!.trim();
-        if (code.toUpperCase() != 'CODE' && desc.toUpperCase() != 'DESCRIPTION') {
-          codes[code] = desc;
+      // Strategy 1: pipe-separated lines
+      // Handles: "CGET    |Congé Eté" and "#       |Repos pre-courier"
+      // Also handles wrapped descriptions across lines
+      final lines = block.split('\n');
+      String? lastCode;
+      for (final line in lines) {
+        final trimmed = line.trim();
+        if (trimmed.isEmpty) continue;
+
+        // Match: CODE | description (code can be symbols like # or /RH)
+        final pipeMatch = RegExp(r'^([^\s|]+(?:\s*/\s*\w+)?)\s*\|\s*(.+)$').firstMatch(trimmed);
+        if (pipeMatch != null) {
+          final code = pipeMatch.group(1)!.trim();
+          final desc = pipeMatch.group(2)!.trim();
+          if (code.toUpperCase() != 'CODE' && desc.toUpperCase() != 'DESCRIPTION') {
+            codes[code] = desc;
+            lastCode = code;
+          }
+          continue;
+        }
+
+        // Check for multiple pipe entries on one line:
+        // "CGET    |Congé Eté      /RH     |Repos Hebdomadaire"
+        if (trimmed.contains('|')) {
+          final multiPipe = RegExp(r'(\S+)\s*\|\s*([^|]+?)(?=\s{2,}\S+\s*\||$)');
+          final matches = multiPipe.allMatches(trimmed);
+          for (final m in matches) {
+            final code = m.group(1)!.trim();
+            final desc = m.group(2)!.trim();
+            if (code.toUpperCase() != 'CODE' && desc.toUpperCase() != 'DESCRIPTION' && desc.isNotEmpty) {
+              codes[code] = desc;
+              lastCode = code;
+            }
+          }
+          continue;
+        }
+
+        // Continuation line (no pipe, no code-like start) - append to last code
+        if (lastCode != null && codes.containsKey(lastCode)) {
+          final isNewCode = RegExp(r'^[A-Z/#][A-Z0-9/#]{0,8}\s').hasMatch(trimmed);
+          if (!isNewCode) {
+            codes[lastCode] = '${codes[lastCode]!} $trimmed';
+            continue;
+          }
+        }
+
+        // Fallback: space-separated "CODE Description text"
+        final spaceMatch = RegExp(r'^(//?(?:RH)?|#|[A-Z][A-Z0-9/]{0,8})\s{2,}(.+)$').firstMatch(trimmed);
+        if (spaceMatch != null) {
+          final code = spaceMatch.group(1)!.trim();
+          final desc = spaceMatch.group(2)!.trim();
+          if (code.toUpperCase() != 'CODE' && desc.length > 1) {
+            codes[code] = desc;
+            lastCode = code;
+          }
         }
       }
 
-      // Try tab-separated format
+      // Strategy 2: tab-separated
       if (codes.isEmpty) {
-        for (final line in block.split('\n')) {
+        for (final line in lines) {
           final parts = line.split('\t');
           for (int i = 0; i < parts.length - 1; i += 2) {
             final code = parts[i].trim();
@@ -1216,20 +1286,17 @@ class RosterParser {
           }
         }
       }
+    }
 
-      // Try space-separated: CODE Description text
-      if (codes.isEmpty) {
-        for (final line in block.split('\n')) {
-          final trimmed = line.trim();
-          if (trimmed.isEmpty) continue;
-          final m = RegExp(r'^(//?(?:RH)?|[A-Z][A-Z0-9/]{1,8})\s+(.+)$').firstMatch(trimmed);
-          if (m != null) {
-            final code = m.group(1)!.trim();
-            final desc = m.group(2)!.trim();
-            if (code.toUpperCase() != 'CODE' && desc.toUpperCase() != 'DESCRIPTION' && desc.length > 1) {
-              codes[code] = desc;
-            }
-          }
+    // Also scan the entire text for pipe-separated code entries outside a section
+    if (codes.isEmpty) {
+      final globalPipe = RegExp(r'^([A-Z/#][A-Z0-9/#]{0,8})\s*\|\s*(.{3,})$', multiLine: true);
+      final matches = globalPipe.allMatches(text);
+      for (final m in matches) {
+        final code = m.group(1)!.trim();
+        final desc = m.group(2)!.trim();
+        if (code.toUpperCase() != 'CODE' && desc.toUpperCase() != 'DESCRIPTION') {
+          codes[code] = desc;
         }
       }
     }
