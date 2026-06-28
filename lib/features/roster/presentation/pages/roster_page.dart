@@ -434,38 +434,101 @@ class _RosterCalendar extends ConsumerWidget {
                       ),
                     ),
 
-                  if (localTasks.isEmpty)
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.withValues(alpha: 0.05),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.withValues(alpha: 0.2), style: BorderStyle.solid),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                  // Suggestions rapides
+                  const SizedBox(height: 6),
+                  Text('Ajouter rapidement', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey[600])),
+                  const SizedBox(height: 8),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxHeight: 180),
+                    child: SingleChildScrollView(
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
                         children: [
-                          Icon(Icons.add_alert, size: 18, color: Colors.grey[400]),
-                          const SizedBox(width: 8),
-                          Text('Aucun rappel', style: TextStyle(color: Colors.grey[400], fontSize: 13)),
-                        ],
+                          ('Payer électricité', Icons.bolt, 2),
+                          ('Payer loyer', Icons.home, 1),
+                          ('Payer internet', Icons.wifi, 0),
+                          ('Payer assurance', Icons.shield, 4),
+                          ('Courses', Icons.shopping_cart, 3),
+                          ('RDV médecin', Icons.local_hospital, 1),
+                          ('RDV dentiste', Icons.medical_services, 1),
+                          ('Appeler plombier', Icons.plumbing, 2),
+                          ('Appeler électricien', Icons.electrical_services, 2),
+                          ('Récupérer enfants', Icons.child_care, 5),
+                          ('Sport enfants', Icons.sports_soccer, 3),
+                          ('École réunion', Icons.school, 4),
+                          ('Anniversaire', Icons.cake, 5),
+                          ('Fin abonnement', Icons.cancel, 1),
+                          ('Renouveler abo', Icons.autorenew, 0),
+                          ('Contrôle technique', Icons.car_repair, 2),
+                          ('Vidange voiture', Icons.local_car_wash, 2),
+                          ('Pressing', Icons.dry_cleaning, 4),
+                          ('Colis à récupérer', Icons.inventory, 2),
+                          ('Appel important', Icons.phone, 0),
+                          ('Papiers admin', Icons.description, 4),
+                          ('Visa / Passeport', Icons.flight, 0),
+                        ].map((item) {
+                          final label = item.$1;
+                          final icon = item.$2;
+                          final colorIdx = item.$3;
+                          final rappelColorsList = [
+                            const Color(0xFF2980B9), const Color(0xFFE74C3C),
+                            const Color(0xFFF39C12), const Color(0xFF27AE60),
+                            const Color(0xFF8E44AD), const Color(0xFFE91E63),
+                            const Color(0xFF1ABC9C),
+                          ];
+                          final c = rappelColorsList[colorIdx];
+                          final alreadyAdded = localTasks.any((t) => t['text'] == label);
+                          return GestureDetector(
+                            onTap: alreadyAdded ? null : () {
+                              setSheetState(() {
+                                localTasks.add({'text': label, 'color': colorIdx});
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                              decoration: BoxDecoration(
+                                color: alreadyAdded ? Colors.grey.withValues(alpha: 0.1) : c.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: alreadyAdded ? Colors.grey.withValues(alpha: 0.3) : c.withValues(alpha: 0.4)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(alreadyAdded ? Icons.check : icon, size: 14, color: alreadyAdded ? Colors.grey : c),
+                                  const SizedBox(width: 5),
+                                  Text(
+                                    label,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: alreadyAdded ? Colors.grey : c,
+                                      decoration: alreadyAdded ? TextDecoration.lineThrough : null,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }).toList(),
                       ),
                     ),
+                  ),
 
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
 
-                  // Color picker for new rappel
-                  Text('Couleur du rappel', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                  const SizedBox(height: 6),
+                  // Custom rappel: color picker + input
+                  Text('Ou ajouter un rappel personnalisé', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey[600])),
+                  const SizedBox(height: 8),
                   Row(
                     children: [
-                      for (int ci = 0; ci < 7; ci++) ...[
+                      for (int ci = 0; ci < 7; ci++)
                         GestureDetector(
                           onTap: () => setSheetState(() => selectedRappelColor = ci),
                           child: Container(
-                            width: 32,
-                            height: 32,
-                            margin: const EdgeInsets.only(right: 6),
+                            width: 28,
+                            height: 28,
+                            margin: const EdgeInsets.only(right: 5),
                             decoration: BoxDecoration(
                               color: [
                                 const Color(0xFF2980B9), const Color(0xFFE74C3C),
@@ -473,7 +536,7 @@ class _RosterCalendar extends ConsumerWidget {
                                 const Color(0xFF8E44AD), const Color(0xFFE91E63),
                                 const Color(0xFF1ABC9C),
                               ][ci].withValues(alpha: selectedRappelColor == ci ? 1.0 : 0.3),
-                              borderRadius: BorderRadius.circular(8),
+                              borderRadius: BorderRadius.circular(7),
                               border: Border.all(
                                 color: selectedRappelColor == ci
                                     ? [
@@ -483,27 +546,24 @@ class _RosterCalendar extends ConsumerWidget {
                                         const Color(0xFF1ABC9C),
                                       ][ci]
                                     : Colors.transparent,
-                                width: selectedRappelColor == ci ? 2.5 : 0,
+                                width: selectedRappelColor == ci ? 2 : 0,
                               ),
                             ),
                             child: selectedRappelColor == ci
-                                ? const Icon(Icons.check, size: 16, color: Colors.white)
+                                ? const Icon(Icons.check, size: 14, color: Colors.white)
                                 : null,
                           ),
                         ),
-                      ],
                     ],
                   ),
-                  const SizedBox(height: 10),
-
-                  // Add rappel input
+                  const SizedBox(height: 8),
                   Row(
                     children: [
                       Expanded(
                         child: TextField(
                           controller: taskController,
                           decoration: InputDecoration(
-                            hintText: 'Nouveau rappel...',
+                            hintText: 'Mon rappel...',
                             hintStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
