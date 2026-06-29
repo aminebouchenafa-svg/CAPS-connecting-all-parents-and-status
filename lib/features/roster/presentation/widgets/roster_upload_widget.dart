@@ -36,24 +36,29 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
           endPageIndex: page,
         );
         for (final line in lines) {
-          final lineText = line.text;
-          if (lineText.trim().isEmpty) continue;
+          if (line.text.trim().isEmpty) continue;
 
           final y = line.bounds.top + page * 10000;
 
-          // Split each text line into individual tokens, each with its
-          // own estimated x position. This ensures each value (airport,
-          // time, flight number) is assigned to its correct day column.
-          final charWidth =
-              lineText.isEmpty ? 1.0 : line.bounds.width / lineText.length;
-          final tokenPattern = RegExp(r'\S+');
-          for (final match in tokenPattern.allMatches(lineText)) {
-            final token = match.group(0)!;
-            if (token.isEmpty) continue;
+          // Use word-level bounds from PDF for exact x positions.
+          // Each TextWord has its own bounding rectangle from the PDF,
+          // giving precise column alignment.
+          final words = line.wordCollection;
+          if (words.isNotEmpty) {
+            for (final word in words) {
+              final text = word.text.trim();
+              if (text.isEmpty) continue;
+              allCells.add((
+                x: word.bounds.left,
+                y: y,
+                text: text,
+              ));
+            }
+          } else {
             allCells.add((
-              x: line.bounds.left + match.start * charWidth,
+              x: line.bounds.left,
               y: y,
-              text: token,
+              text: line.text.trim(),
             ));
           }
         }
