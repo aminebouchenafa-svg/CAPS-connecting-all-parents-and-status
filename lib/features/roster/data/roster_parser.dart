@@ -1059,6 +1059,7 @@ class RosterParser {
 
   int? _dayFromCell(String cell) {
     if (cell.isEmpty) return null;
+    if (cell.contains(':')) return null;
     final match = RegExp(r'^(\d{1,2})').firstMatch(cell);
     if (match == null) return null;
     final d = int.tryParse(match.group(1)!);
@@ -1160,12 +1161,17 @@ class RosterParser {
     // Debug
     final debugSb = StringBuffer();
     debugSb.writeln('=== GRID PARSER DEBUG ===');
+    debugSb.writeln('Total lines: ${lines.length}');
     debugSb.writeln('Date row index: $dateRowIdx');
+    final dateRowCells = lines[dateRowIdx!].split('\t');
+    debugSb.writeln('Date row cells: ${dateRowCells.length}');
+    debugSb.writeln('Date row: ${dateRowCells.where((c) => c.trim().isNotEmpty).join(" | ")}');
     debugSb.writeln('Columns mapped: ${colToDay.length}');
     final dayColCounts = <int, int>{};
     for (final d in colToDay.values) {
       dayColCounts[d] = (dayColCounts[d] ?? 0) + 1;
     }
+    debugSb.writeln('Days covered: ${dayColCounts.keys.toList()..sort()}');
     debugSb.writeln('Days with data columns: ${dayColCounts.length}');
 
     final duties = <RosterDuty>[];

@@ -200,20 +200,17 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
         Navigator.of(context).pop();
 
         final flightCount = roster.duties.where((d) => d.isFlight).length;
-        if (flightCount < 3) {
-          _showRawTextDialog(context, text, roster, parser.lastDebugInfo);
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Roster de ${roster.pilotName} chargé ! '
-                '$flightCount vols trouvés.',
-              ),
-              backgroundColor: AppColors.success,
-              duration: const Duration(seconds: 3),
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Roster de ${roster.pilotName} chargé ! '
+              '$flightCount vols trouvés.',
             ),
-          );
-        }
+            backgroundColor: AppColors.success,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        _showRawTextDialog(context, text, roster, parser.lastDebugInfo);
       }
     } catch (e) {
       setState(() {
