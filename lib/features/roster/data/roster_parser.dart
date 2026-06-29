@@ -162,10 +162,10 @@ class RosterParser {
     final month = periodStart.month;
     final daysInMonth = DateTime(year, month + 1, 0).day;
 
-    var duties = _trySequentialParse(text, year, month, daysInMonth);
+    var duties = _tryGridParse(text, year, month, daysInMonth);
 
     if (duties.isEmpty) {
-      duties = _tryGridParse(text, year, month, daysInMonth);
+      duties = _trySequentialParse(text, year, month, daysInMonth);
     }
 
     if (duties.isEmpty) {
@@ -1106,25 +1106,48 @@ class RosterParser {
 
     if (dateRowIdx == null) return [];
 
-    final dayData = <int, List<String>>{};
-    for (final day in colToDay.values) {
-      dayData[day] = [];
+    // Fill gaps: columns between two day-number columns belong to
+    // the preceding day (e.g. "Mar" column after "01" maps to day 1)
+    if (colToDay.length >= 2) {
+      final dateCells = lines[dateRowIdx!].split('\t');
+      final sortedCols = colToDay.keys.toList()..sort();
+      for (int i = 0; i < sortedCols.length; i++) {
+        final col = sortedCols[i];
+        final day = colToDay[col]!;
+        final nextCol = i + 1 < sortedCols.length
+            ? sortedCols[i + 1]
+            : dateCells.length;
+        for (int c = col + 1; c < nextCol; c++) {
+          colToDay[c] = day;
+        }
+      }
     }
 
-    for (int i = dateRowIdx + 1; i < lines.length; i++) {
+    final dayData = <int, List<String>>{};
+    for (int d = 1; d <= daysInMonth; d++) {
+      dayData[d] = [];
+    }
+
+    for (int i = dateRowIdx! + 1; i < lines.length; i++) {
       final lineText = lines[i].toLowerCase();
       if (lineText.contains('block hours') ||
           lineText.contains('duty hours') ||
           lineText.contains('off days') ||
           lineText.contains('flight days') ||
-          lineText.contains('total landings')) {
+          lineText.contains('total landings') ||
+          lineText.contains('code explanations') ||
+          lineText.contains('totals') ||
+          RegExp(r'page\s+\d').hasMatch(lineText)) {
         break;
       }
+      if (RegExp(r'^[A-Z]$').hasMatch(lines[i].trim())) break;
+      if (RegExp(r'\d{2}-\d{2}-\d{4}\s+at').hasMatch(lines[i])) break;
 
       final cells = lines[i].split('\t');
       for (final entry in colToDay.entries) {
         final col = entry.key;
         final day = entry.value;
+        if (day < 1 || day > daysInMonth) continue;
         if (col < cells.length) {
           final val = cells[col].trim();
           if (val.isNotEmpty) {
@@ -1134,14 +1157,35 @@ class RosterParser {
       }
     }
 
+    // Debug
+    final debugSb = StringBuffer();
+    debugSb.writeln('=== GRID PARSER DEBUG ===');
+    debugSb.writeln('Date row index: $dateRowIdx');
+    debugSb.writeln('Columns mapped: ${colToDay.length}');
+    final dayColCounts = <int, int>{};
+    for (final d in colToDay.values) {
+      dayColCounts[d] = (dayColCounts[d] ?? 0) + 1;
+    }
+    debugSb.writeln('Days with data columns: ${dayColCounts.length}');
+
     final duties = <RosterDuty>[];
     for (final entry in dayData.entries) {
       final day = entry.key;
       if (day > daysInMonth) continue;
       final values = entry.value;
+      debugSb.writeln('Day $day (${values.length} values): ${values.join(" | ")}');
       if (values.isEmpty) continue;
       duties.addAll(_parseDayColumn(values, year, month, day));
     }
+
+    debugSb.writeln('Total duties: ${duties.length}');
+    debugSb.writeln('Flights: ${duties.where((d) => d.isFlight).length}');
+    for (final d in duties) {
+      if (d.isFlight) {
+        debugSb.writeln('  Day ${d.date.day}: ${d.flightNumber} ${d.departure ?? "?"}→${d.arrival ?? "?"} ${d.checkIn != null ? "${d.checkIn!.hour}:${d.checkIn!.minute.toString().padLeft(2, "0")}" : "?"} - ${d.checkOut != null ? "${d.checkOut!.hour}:${d.checkOut!.minute.toString().padLeft(2, "0")}" : "?"}');
+      }
+    }
+    lastDebugInfo = debugSb.toString();
 
     return duties;
   }
@@ -1149,16 +1193,13 @@ class RosterParser {
   List<RosterDuty> _parseDayColumn(
       List<String> values, int year, int month, int day) {
     final duties = <RosterDuty>[];
-    final flightNums = <String>[];
-    final airports = <String>[];
-    final times = <DateTime>[];
-    bool hasActivity = false;
-    DutyType actType = DutyType.off;
-    String? actCode;
-    String? actNotes;
+    final date = DateTime(year, month, day);
 
+    // Classify each value
+    final classified = <({String type, String raw})>[];
     for (final v in values) {
       final cleaned = v.replaceAll('*', '').trim();
+      if (cleaned.isEmpty) continue;
       final upper = cleaned.toUpperCase();
 
       if (RegExp(
@@ -1170,61 +1211,101 @@ class RosterParser {
           .hasMatch(cleaned)) continue;
 
       if (_avioDevCodes.contains(upper)) {
-        hasActivity = true;
-        actType = _avioDevType(upper);
-        actCode = upper;
-        actNotes = _avioDevLabel(upper);
-        continue;
-      }
-
-      final fn = _extractFlightNum(upper);
-      if (fn != null) {
-        flightNums.add(fn);
-        continue;
-      }
-
-      final apt = upper.replaceAll('*', '');
-      if (RegExp(r'^[A-Z]{3}$').hasMatch(apt) && !_avioDevCodes.contains(apt)) {
-        airports.add(apt);
-        continue;
-      }
-
-      final time = _timeFromStr(year, month, day, cleaned);
-      if (time != null) {
-        times.add(time);
-        continue;
+        classified.add((type: 'code', raw: upper));
+      } else if (_extractFlightNum(upper) != null) {
+        classified.add((type: 'flight', raw: upper));
+      } else if (RegExp(r'^[A-Z]{3}$').hasMatch(upper) && !_avioDevCodes.contains(upper)) {
+        classified.add((type: 'airport', raw: upper));
+      } else if (_timePattern.hasMatch(cleaned)) {
+        classified.add((type: 'time', raw: cleaned));
       }
     }
 
-    if (hasActivity && flightNums.isEmpty) {
+    if (classified.isEmpty) return duties;
+
+    // Check for activity codes (non-flight duties)
+    final hasCode = classified.any((c) => c.type == 'code');
+    final hasFlight = classified.any((c) => c.type == 'flight');
+
+    if (hasCode && !hasFlight) {
+      final code = classified.firstWhere((c) => c.type == 'code');
+      final timesForCode = classified.where((c) => c.type == 'time').toList();
       duties.add(RosterDuty(
-        date: DateTime(year, month, day),
-        type: actType,
-        activityCode: actCode,
-        notes: actNotes,
+        date: date,
+        type: _avioDevType(code.raw),
+        activityCode: code.raw,
+        notes: _avioDevLabel(code.raw),
+        checkIn: timesForCode.isNotEmpty
+            ? _timeFromStr(year, month, day, timesForCode[0].raw) : null,
+        checkOut: timesForCode.length > 1
+            ? _timeFromStr(year, month, day, timesForCode[1].raw) : null,
       ));
       return duties;
     }
 
-    if (flightNums.isEmpty && airports.length == 1) {
+    // Outstation day (single airport, no flights)
+    if (!hasFlight && classified.where((c) => c.type == 'airport').length == 1) {
+      final apt = classified.firstWhere((c) => c.type == 'airport');
       duties.add(RosterDuty(
-        date: DateTime(year, month, day),
+        date: date,
         type: DutyType.rest,
-        activityCode: airports[0],
-        notes: 'Escale ${airportNames[airports[0]] ?? airports[0]}',
+        activityCode: apt.raw,
+        notes: 'Escale ${airportNames[apt.raw] ?? apt.raw}',
       ));
       return duties;
     }
 
-    for (int i = 0; i < flightNums.length; i++) {
+    if (!hasFlight) return duties;
+
+    // Parse legs sequentially. PDF column structure per leg:
+    //   flight_num, report_time, STD, dep_airport, arr_airport, STA
+    // We walk through classified values and start a new leg each time
+    // we see a flight number.
+    final legs = <({String fn, String? dep, String? arr,
+        String? reportTime, String? std, String? sta})>[];
+
+    List<String> legTimes = [];
+    List<String> legAirports = [];
+    String? currentFn;
+
+    void flushLeg() {
+      if (currentFn == null) return;
+      // Times order: report, STD, STA (up to 3 per leg)
+      // For display: checkIn = STD (2nd time), checkOut = STA (3rd time)
+      legs.add((
+        fn: _extractFlightNum(currentFn!)!,
+        dep: legAirports.isNotEmpty ? legAirports[0] : null,
+        arr: legAirports.length > 1 ? legAirports[1] : null,
+        reportTime: legTimes.isNotEmpty ? legTimes[0] : null,
+        std: legTimes.length > 1 ? legTimes[1] : null,
+        sta: legTimes.length > 2 ? legTimes[2] : null,
+      ));
+      legTimes = [];
+      legAirports = [];
+      currentFn = null;
+    }
+
+    for (final c in classified) {
+      if (c.type == 'flight') {
+        flushLeg();
+        currentFn = c.raw;
+      } else if (c.type == 'time' && currentFn != null) {
+        legTimes.add(c.raw);
+      } else if (c.type == 'airport' && currentFn != null) {
+        legAirports.add(c.raw);
+      }
+    }
+    flushLeg();
+
+    for (final leg in legs) {
       duties.add(RosterDuty(
-        date: DateTime(year, month, day),
+        date: date,
         type: DutyType.flight,
-        flightNumber: flightNums[i],
-        departure: (i * 2) < airports.length ? airports[i * 2] : null,
-        arrival: (i * 2 + 1) < airports.length ? airports[i * 2 + 1] : null,
-        checkIn: (i * 2) < times.length ? times[i * 2] : null,
-        checkOut: (i * 2 + 1) < times.length ? times[i * 2 + 1] : null,
+        flightNumber: leg.fn,
+        departure: leg.dep,
+        arrival: leg.arr,
+        checkIn: _timeFromStr(year, month, day, leg.std ?? leg.reportTime),
+        checkOut: _timeFromStr(year, month, day, leg.sta),
       ));
     }
 
