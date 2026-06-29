@@ -41,31 +41,19 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
 
           final y = line.bounds.top + page * 10000;
 
-          // TextLines often span entire grid rows. Split into individual
-          // cells by detecting gaps of 2+ spaces in the text.
-          final segments = lineText.split(RegExp(r'\s{2,}'));
-          if (segments.length > 1) {
-            final charWidth =
-                lineText.isEmpty ? 1.0 : line.bounds.width / lineText.length;
-            int searchFrom = 0;
-            for (final seg in segments) {
-              final trimmed = seg.trim();
-              if (trimmed.isEmpty) continue;
-              final idx = lineText.indexOf(seg, searchFrom);
-              if (idx >= 0) {
-                allCells.add((
-                  x: line.bounds.left + idx * charWidth,
-                  y: y,
-                  text: trimmed,
-                ));
-                searchFrom = idx + seg.length;
-              }
-            }
-          } else {
+          // Split each text line into individual tokens, each with its
+          // own estimated x position. This ensures each value (airport,
+          // time, flight number) is assigned to its correct day column.
+          final charWidth =
+              lineText.isEmpty ? 1.0 : line.bounds.width / lineText.length;
+          final tokenPattern = RegExp(r'\S+');
+          for (final match in tokenPattern.allMatches(lineText)) {
+            final token = match.group(0)!;
+            if (token.isEmpty) continue;
             allCells.add((
-              x: line.bounds.left,
+              x: line.bounds.left + match.start * charWidth,
               y: y,
-              text: lineText.trim(),
+              text: token,
             ));
           }
         }
