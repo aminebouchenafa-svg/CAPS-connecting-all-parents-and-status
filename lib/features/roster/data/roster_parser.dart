@@ -162,10 +162,10 @@ class RosterParser {
     final month = periodStart.month;
     final daysInMonth = DateTime(year, month + 1, 0).day;
 
-    var duties = _tryGridParse(text, year, month, daysInMonth);
+    var duties = _trySequentialParse(text, year, month, daysInMonth);
 
     if (duties.isEmpty) {
-      duties = _trySequentialParse(text, year, month, daysInMonth);
+      duties = _tryGridParse(text, year, month, daysInMonth);
     }
 
     if (duties.isEmpty) {
@@ -497,7 +497,9 @@ class RosterParser {
     }
 
     // Step 5: Extract airport rows (lines with mostly 3-letter codes)
+    // Store both flat lists (fallback) and raw lines (for tab-based mapping)
     final airportRows = <List<String>>[];
+    final airportRawLines = <String>[];
     for (final dl in dataLines) {
       final tokens = dl.split(RegExp(r'\s+'));
       if (tokens.length < 3) continue;
@@ -512,34 +514,71 @@ class RosterParser {
       }
       if (aptCount >= 3 && aptCount > tokens.length * 0.6) {
         airportRows.add(apts);
+        airportRawLines.add(dl);
+      }
+    }
+
+    // Step 5b: Build column-to-day mapping from date row tab structure
+    final dateTabCells = lines[dateRowIdx].split('\t');
+    final colToDayIdx = <int, int>{};
+    final dayNumToIdx = <int, int>{};
+    for (int di = 0; di < dayDates.length; di++) {
+      dayNumToIdx[dayDates[di].day] = di;
+    }
+    for (int j = 0; j < dateTabCells.length; j++) {
+      final cell = dateTabCells[j].trim();
+      final dayMatch = RegExp(r'^(\d{1,2})').firstMatch(cell);
+      if (dayMatch != null) {
+        final d = int.tryParse(dayMatch.group(1)!);
+        if (d != null && d >= 1 && d <= daysInMonth) {
+          final rest = cell.substring(dayMatch.end).trim();
+          if (rest.isEmpty || !RegExp(r'^\d').hasMatch(rest)) {
+            final idx = dayNumToIdx[d];
+            if (idx != null) colToDayIdx[j] = idx;
+          }
+        }
       }
     }
 
     // Step 6: Map airport pairs to flight days.
-    // Airport rows contain data for actual flights. Outstation days (airport
-    // code in activity row) may also have entries in airport rows.
-    // Detect which mapping to use by comparing entry counts.
     final nFlights = flightDayIndices.length;
     final flightRoutes = <int, ({String dep, String arr})>{};
 
-    if (airportRows.length >= 2) {
+    // Primary: tab-based column mapping (eliminates alignment bugs)
+    if (colToDayIdx.isNotEmpty && airportRawLines.length >= 2) {
+      final depTabs = airportRawLines[0].split('\t');
+      final arrTabs = airportRawLines[1].split('\t');
+
+      for (final entry in colToDayIdx.entries) {
+        final col = entry.key;
+        final dayIdx = entry.value;
+        if (!flightDayIndices.contains(dayIdx)) continue;
+
+        final dep = col < depTabs.length
+            ? depTabs[col].trim().toUpperCase().replaceAll('*', '') : '';
+        final arr = col < arrTabs.length
+            ? arrTabs[col].trim().toUpperCase().replaceAll('*', '') : '';
+
+        if (dep.isNotEmpty && RegExp(r'^[A-Z]{3}$').hasMatch(dep) &&
+            arr.isNotEmpty && RegExp(r'^[A-Z]{3}$').hasMatch(arr)) {
+          flightRoutes[dayIdx] = (dep: dep, arr: arr);
+        }
+      }
+    }
+
+    // Fallback: flat-list mapping if tab mapping found nothing
+    if (flightRoutes.isEmpty && airportRows.length >= 2) {
       final depRow = airportRows[0];
       final arrRow = airportRows[1];
-
-      // Build combined list of days that may have airport data
       final allAirportDays = [...flightDayIndices, ...outstationDayIndices]..sort();
-
-      // If airport row count matches combined list, outstation days have entries
       final List<int> mappingIndices;
       if (allAirportDays.length > nFlights && depRow.length == allAirportDays.length) {
         mappingIndices = allAirportDays;
       } else {
         mappingIndices = flightDayIndices;
       }
-
       final n = [depRow.length, arrRow.length, mappingIndices.length]
           .reduce((a, b) => a < b ? a : b);
-
       for (int i = 0; i < n; i++) {
         final dayIndex = mappingIndices[i];
         if (flightDayIndices.contains(dayIndex)) {
@@ -550,6 +589,7 @@ class RosterParser {
 
     // Step 7: Extract time rows and map to flight days
     final timeRows = <List<String>>[];
+    final timeRawLines = <String>[];
     for (final dl in dataLines) {
       final tokens = dl.split(RegExp(r'\s+'));
       if (tokens.length < 3) continue;
@@ -563,12 +603,11 @@ class RosterParser {
       }
       if (timeCount >= 3 && timeCount > tokens.length * 0.6) {
         timeRows.add(times);
+        timeRawLines.add(dl);
       }
     }
 
     // Map check-in/check-out times to timed activity days.
-    // Timed = flights, HS, SBY, ING*, ESIM, INST
-    // Excluded: off/rest codes + ARRT/DEPL (no scheduled times in PDF)
     const _noTimeCodes = {'/', '/RH', '//', 'RH', 'OFF', 'DO', 'JA', 'ABS', 'C/O', 'REPOS', 'REST', 'ARRT', 'DEPL', '#', 'CGET'};
     final timedDayIndices = <int>[];
     for (int di = 0; di < dayDates.length; di++) {
@@ -576,11 +615,34 @@ class RosterParser {
       if (act == null) continue;
       final upper = act.toUpperCase();
       if (_noTimeCodes.contains(upper)) continue;
+      if (outstationDayIndices.contains(di)) continue;
       timedDayIndices.add(di);
     }
 
     final flightTimes = <int, ({String checkIn, String checkOut})>{};
-    if (timeRows.length >= 2) {
+
+    // Primary: tab-based time mapping
+    if (colToDayIdx.isNotEmpty && timeRawLines.length >= 2) {
+      final checkInTabs = timeRawLines[0].split('\t');
+      final checkOutTabs = timeRawLines[1].split('\t');
+
+      for (final entry in colToDayIdx.entries) {
+        final col = entry.key;
+        final dayIdx = entry.value;
+        if (!timedDayIndices.contains(dayIdx)) continue;
+
+        final ci = col < checkInTabs.length ? checkInTabs[col].trim() : '';
+        final co = col < checkOutTabs.length ? checkOutTabs[col].trim() : '';
+
+        if (ci.isNotEmpty && _timePattern.hasMatch(ci) &&
+            co.isNotEmpty && _timePattern.hasMatch(co)) {
+          flightTimes[dayIdx] = (checkIn: ci, checkOut: co);
+        }
+      }
+    }
+
+    // Fallback: flat-list time mapping
+    if (flightTimes.isEmpty && timeRows.length >= 2) {
       final checkInRow = timeRows[0];
       final checkOutRow = timeRows[1];
       final n = [checkInRow.length, checkOutRow.length, timedDayIndices.length]
@@ -594,9 +656,24 @@ class RosterParser {
     }
 
     // Step 7b: Map STA (arrival) from timeRows[2] to flight days
-    // timeRows[2] has M values aligned to flightDayIndices (not timedDayIndices)
     final flightArrivalTimes = <int, String>{};
-    if (timeRows.length >= 3 && flightDayIndices.isNotEmpty) {
+
+    // Primary: tab-based STA mapping
+    if (colToDayIdx.isNotEmpty && timeRawLines.length >= 3) {
+      final staTabs = timeRawLines[2].split('\t');
+      for (final entry in colToDayIdx.entries) {
+        final col = entry.key;
+        final dayIdx = entry.value;
+        if (!flightDayIndices.contains(dayIdx)) continue;
+        final sta = col < staTabs.length ? staTabs[col].trim() : '';
+        if (sta.isNotEmpty && _timePattern.hasMatch(sta)) {
+          flightArrivalTimes[dayIdx] = sta;
+        }
+      }
+    }
+
+    // Fallback: flat-list STA mapping
+    if (flightArrivalTimes.isEmpty && timeRows.length >= 3 && flightDayIndices.isNotEmpty) {
       final staRow = timeRows[2];
       final n = [staRow.length, flightDayIndices.length].reduce((a, b) => a < b ? a : b);
       for (int i = 0; i < n; i++) {
@@ -605,9 +682,8 @@ class RosterParser {
     }
 
     // Step 8: Extract extra flight rows (2nd legs, 3rd legs, etc.)
-    // Use a low threshold (>= 1 flight number) but filter out lines already
-    // identified as airport rows or time rows by checking overlap.
     final extraFlightRows = <List<String>>[];
+    final extraFlightRawLines = <String>[];
     for (final dl in dataLines) {
       final tokens = dl.split(RegExp(r'\s+'));
       if (tokens.isEmpty) continue;
@@ -624,91 +700,113 @@ class RosterParser {
         if (_airportPattern.hasMatch(t.toUpperCase())) aptCount++;
         if (_timePattern.hasMatch(t)) timeCount++;
       }
-      // Skip lines that are airport rows or time rows
       if (aptCount > fnCount || timeCount > fnCount) continue;
-      // Accept if at least 1 flight number and flight numbers dominate
       if (fnCount >= 1 && fnCount >= tokens.length * 0.4) {
         extraFlightRows.add(fns);
+        extraFlightRawLines.add(dl);
       }
     }
 
-    // Match extra legs by route continuity across all tiers:
-    //   2nd-leg departure == 1st-leg arrival
-    //   3rd-leg departure == 2nd-leg arrival
-    //   etc.
-    // Airport rows alternate dep/arr per tier:
-    //   [0]=1st dep, [1]=1st arr, [2]=2nd dep, [3]=2nd arr, ...
+    // Step 8 - extra legs: use tab-based column mapping when available
     final extraLegs = <int, List<({String fn, String? dep, String? arr})>>{};
-    for (int r = 0; r < extraFlightRows.length; r++) {
-      final row = extraFlightRows[r];
 
-      final depRowIdx = 2 + r * 2;
-      final arrRowIdx = 3 + r * 2;
-      final depN = depRowIdx < airportRows.length ? airportRows[depRowIdx] : null;
-      final arrN = arrRowIdx < airportRows.length ? airportRows[arrRowIdx] : null;
+    // Primary: tab-based mapping for extra legs
+    if (colToDayIdx.isNotEmpty && airportRawLines.length >= 4) {
+      for (int tier = 1; tier * 2 + 1 < airportRawLines.length; tier++) {
+        final depTabs = airportRawLines[tier * 2].split('\t');
+        final arrTabs = airportRawLines[tier * 2 + 1].split('\t');
 
-      final matched = <int>{};
-      for (int i = 0; i < row.length; i++) {
-        final dN = depN != null && i < depN.length ? depN[i] : null;
-        final aN = arrN != null && i < arrN.length ? arrN[i] : null;
+        // Find extra flight numbers via tab mapping too
+        final fnTabs = tier - 1 < extraFlightRawLines.length
+            ? extraFlightRawLines[tier - 1].split('\t') : <String>[];
 
-        if (dN == null) continue;
+        for (final entry in colToDayIdx.entries) {
+          final col = entry.key;
+          final dayIdx = entry.value;
+          if (!flightDayIndices.contains(dayIdx)) continue;
 
-        for (final fi in flightDayIndices) {
-          if (matched.contains(fi)) continue;
+          final dep = col < depTabs.length
+              ? depTabs[col].trim().toUpperCase().replaceAll('*', '') : '';
+          final arr = col < arrTabs.length
+              ? arrTabs[col].trim().toUpperCase().replaceAll('*', '') : '';
 
-          String? prevArr;
-          if (r == 0) {
-            prevArr = flightRoutes[fi]?.arr;
-          } else {
-            final legs = extraLegs[fi];
-            if (legs != null && legs.length >= r) {
-              prevArr = legs[r - 1].arr;
-            }
+          if (dep.isEmpty || !RegExp(r'^[A-Z]{3}$').hasMatch(dep)) continue;
+          if (arr.isEmpty || !RegExp(r'^[A-Z]{3}$').hasMatch(arr)) continue;
+
+          String fn = 'AH ???';
+          if (col < fnTabs.length) {
+            final extracted = _extractFlightNum(fnTabs[col].trim().toUpperCase());
+            if (extracted != null) fn = extracted;
           }
 
-          if (prevArr == dN) {
-            matched.add(fi);
-            extraLegs.putIfAbsent(fi, () => []);
-            extraLegs[fi]!.add((fn: row[i], dep: dN, arr: aN));
-            break;
-          }
+          extraLegs.putIfAbsent(dayIdx, () => []);
+          extraLegs[dayIdx]!.add((fn: fn, dep: dep, arr: arr));
         }
       }
     }
 
-    // Fallback: detect extra legs from airport row pairs when no extra
-    // flight rows were found. If we have 4+ airport rows, rows [2,3] are
-    // dep/arr for 2nd legs. Match by route continuity (arr1 == dep2).
-    if (extraLegs.isEmpty && airportRows.length >= 4) {
-      for (int tier = 1; tier * 2 + 1 < airportRows.length; tier++) {
-        final depRow = airportRows[tier * 2];
-        final arrRow = airportRows[tier * 2 + 1];
-        final n = [depRow.length, arrRow.length].reduce((a, b) => a < b ? a : b);
+    // Fallback: route continuity matching with flat lists
+    if (extraLegs.isEmpty) {
+      for (int r = 0; r < extraFlightRows.length; r++) {
+        final row = extraFlightRows[r];
+        final depRowIdx = 2 + r * 2;
+        final arrRowIdx = 3 + r * 2;
+        final depN = depRowIdx < airportRows.length ? airportRows[depRowIdx] : null;
+        final arrN = arrRowIdx < airportRows.length ? airportRows[arrRowIdx] : null;
 
-        int matchIdx = 0;
-        for (final fi in flightDayIndices) {
-          if (matchIdx >= n) break;
+        final matched = <int>{};
+        for (int i = 0; i < row.length; i++) {
+          final dN = depN != null && i < depN.length ? depN[i] : null;
+          final aN = arrN != null && i < arrN.length ? arrN[i] : null;
+          if (dN == null) continue;
 
-          String? prevArr;
-          if (tier == 1) {
-            prevArr = flightRoutes[fi]?.arr;
-          } else {
-            final legs = extraLegs[fi];
-            if (legs != null && legs.length >= tier - 1) {
-              prevArr = legs[tier - 2].arr;
+          for (final fi in flightDayIndices) {
+            if (matched.contains(fi)) continue;
+            String? prevArr;
+            if (r == 0) {
+              prevArr = flightRoutes[fi]?.arr;
+            } else {
+              final legs = extraLegs[fi];
+              if (legs != null && legs.length >= r) {
+                prevArr = legs[r - 1].arr;
+              }
+            }
+            if (prevArr == dN) {
+              matched.add(fi);
+              extraLegs.putIfAbsent(fi, () => []);
+              extraLegs[fi]!.add((fn: row[i], dep: dN, arr: aN));
+              break;
             }
           }
+        }
+      }
 
-          if (prevArr != null && prevArr == depRow[matchIdx]) {
-            extraLegs.putIfAbsent(fi, () => []);
-            // Use flight number from extra flight rows if available
-            final fn = tier - 1 < extraFlightRows.length &&
-                    matchIdx < extraFlightRows[tier - 1].length
-                ? extraFlightRows[tier - 1][matchIdx]
-                : 'AH ???';
-            extraLegs[fi]!.add((fn: fn, dep: depRow[matchIdx], arr: arrRow[matchIdx]));
-            matchIdx++;
+      if (extraLegs.isEmpty && airportRows.length >= 4) {
+        for (int tier = 1; tier * 2 + 1 < airportRows.length; tier++) {
+          final depRow = airportRows[tier * 2];
+          final arrRow = airportRows[tier * 2 + 1];
+          final n = [depRow.length, arrRow.length].reduce((a, b) => a < b ? a : b);
+          int matchIdx = 0;
+          for (final fi in flightDayIndices) {
+            if (matchIdx >= n) break;
+            String? prevArr;
+            if (tier == 1) {
+              prevArr = flightRoutes[fi]?.arr;
+            } else {
+              final legs = extraLegs[fi];
+              if (legs != null && legs.length >= tier - 1) {
+                prevArr = legs[tier - 2].arr;
+              }
+            }
+            if (prevArr != null && prevArr == depRow[matchIdx]) {
+              extraLegs.putIfAbsent(fi, () => []);
+              final fn = tier - 1 < extraFlightRows.length &&
+                      matchIdx < extraFlightRows[tier - 1].length
+                  ? extraFlightRows[tier - 1][matchIdx]
+                  : 'AH ???';
+              extraLegs[fi]!.add((fn: fn, dep: depRow[matchIdx], arr: arrRow[matchIdx]));
+              matchIdx++;
+            }
           }
         }
       }
@@ -1276,17 +1374,7 @@ class RosterParser {
       }
     }
 
-    // Fallback: use sequential parser for any still-missing days
-    if (coveredDays.length < daysInMonth) {
-      final fallbackDuties = _trySequentialParse(text, year, month, daysInMonth);
-      for (final fd in fallbackDuties) {
-        if (!coveredDays.contains(fd.date.day)) {
-          duties.add(fd);
-          coveredDays.add(fd.date.day);
-        }
-      }
-    }
-    // Final fallback: grid parser for anything still missing
+    // Fallback: use grid parser for any still-missing days
     if (coveredDays.length < daysInMonth) {
       final gridDuties = _tryGridParse(text, year, month, daysInMonth);
       for (final gd in gridDuties) {
