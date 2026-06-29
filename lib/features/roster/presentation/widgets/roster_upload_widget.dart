@@ -229,7 +229,7 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
             duration: const Duration(seconds: 3),
           ),
         );
-        _showRawTextDialog(context, text, roster, parser.lastDebugInfo);
+        // Debug dialog available via rosterDebugProvider if needed
       }
     } catch (e) {
       setState(() {

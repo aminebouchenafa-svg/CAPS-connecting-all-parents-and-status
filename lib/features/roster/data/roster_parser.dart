@@ -1213,29 +1213,31 @@ class RosterParser {
     final duties = <RosterDuty>[];
     final date = DateTime(year, month, day);
 
-    // Classify each value
+    // Classify each value — split compound cells into individual tokens
     final classified = <({String type, String raw})>[];
     for (final v in values) {
-      final cleaned = v.replaceAll('*', '').trim();
-      if (cleaned.isEmpty) continue;
-      final upper = cleaned.toUpperCase();
+      for (final token in v.split(RegExp(r'\s+'))) {
+        final cleaned = token.replaceAll('*', '').trim();
+        if (cleaned.isEmpty) continue;
+        final upper = cleaned.toUpperCase();
 
-      if (RegExp(
-              r'^(Mon|Tue|Wed|Thu|Fri|Sat|Sun|Lun|Mar|Mer|Jeu|Ven|Sam|Dim)$',
-              caseSensitive: false)
-          .hasMatch(cleaned)) continue;
-      if (RegExp(r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)$',
-              caseSensitive: false)
-          .hasMatch(cleaned)) continue;
+        if (RegExp(
+                r'^(Mon|Tue|Wed|Thu|Fri|Sat|Sun|Lun|Mar|Mer|Jeu|Ven|Sam|Dim)$',
+                caseSensitive: false)
+            .hasMatch(cleaned)) continue;
+        if (RegExp(r'^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)$',
+                caseSensitive: false)
+            .hasMatch(cleaned)) continue;
 
-      if (_avioDevCodes.contains(upper)) {
-        classified.add((type: 'code', raw: upper));
-      } else if (_extractFlightNum(upper) != null) {
-        classified.add((type: 'flight', raw: upper));
-      } else if (RegExp(r'^[A-Z]{3}$').hasMatch(upper) && !_avioDevCodes.contains(upper)) {
-        classified.add((type: 'airport', raw: upper));
-      } else if (_timePattern.hasMatch(cleaned)) {
-        classified.add((type: 'time', raw: cleaned));
+        if (_avioDevCodes.contains(upper)) {
+          classified.add((type: 'code', raw: upper));
+        } else if (_extractFlightNum(upper) != null) {
+          classified.add((type: 'flight', raw: upper));
+        } else if (RegExp(r'^[A-Z]{3}$').hasMatch(upper) && !_avioDevCodes.contains(upper)) {
+          classified.add((type: 'airport', raw: upper));
+        } else if (_timePattern.hasMatch(cleaned)) {
+          classified.add((type: 'time', raw: cleaned));
+        }
       }
     }
 
@@ -1288,15 +1290,26 @@ class RosterParser {
 
     void flushLeg() {
       if (currentFn == null) return;
-      // Times order: report, STD, STA (up to 3 per leg)
-      // For display: checkIn = STD (2nd time), checkOut = STA (3rd time)
+      String? reportTime, std, sta;
+      if (legs.isEmpty && legTimes.length >= 3) {
+        // First leg: [report, STD, STA] — ignore any trailing stats times
+        reportTime = legTimes[0];
+        std = legTimes[1];
+        sta = legTimes[2];
+      } else if (legTimes.length >= 2) {
+        // Subsequent legs (or first with 2 times): [STD, STA]
+        std = legTimes[0];
+        sta = legTimes[1];
+      } else if (legTimes.length == 1) {
+        std = legTimes[0];
+      }
       legs.add((
         fn: _extractFlightNum(currentFn!)!,
         dep: legAirports.isNotEmpty ? legAirports[0] : null,
         arr: legAirports.length > 1 ? legAirports[1] : null,
-        reportTime: legTimes.isNotEmpty ? legTimes[0] : null,
-        std: legTimes.length > 1 ? legTimes[1] : null,
-        sta: legTimes.length > 2 ? legTimes[2] : null,
+        reportTime: reportTime,
+        std: std,
+        sta: sta,
       ));
       legTimes = [];
       legAirports = [];
