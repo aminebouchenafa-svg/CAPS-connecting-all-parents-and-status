@@ -598,8 +598,8 @@ class RosterParser {
       }
     }
 
-    // Fallback: flat-list mapping if tab mapping found nothing
-    if (flightRoutes.isEmpty && airportRows.length >= 2) {
+    // Fallback: flat-list mapping supplements any days tab mapping missed
+    if (airportRows.length >= 2) {
       final depRow = airportRows[0];
       final arrRow = airportRows[1];
       final allAirportDays = [...flightDayIndices, ...outstationDayIndices]..sort();
@@ -613,7 +613,7 @@ class RosterParser {
           .reduce((a, b) => a < b ? a : b);
       for (int i = 0; i < n; i++) {
         final dayIndex = mappingIndices[i];
-        if (flightDayIndices.contains(dayIndex)) {
+        if (flightDayIndices.contains(dayIndex) && !flightRoutes.containsKey(dayIndex)) {
           flightRoutes[dayIndex] = (dep: depRow[i], arr: arrRow[i]);
         }
       }
@@ -686,17 +686,19 @@ class RosterParser {
       }
     }
 
-    // Fallback: flat-list time mapping
-    if (flightTimes.isEmpty && timeRows.length >= 2) {
+    // Fallback: flat-list time mapping supplements any days tab mapping missed
+    if (timeRows.length >= 2) {
       final checkInRow = timeRows[0];
       final checkOutRow = timeRows[1];
       final n = [checkInRow.length, checkOutRow.length, timedDayIndices.length]
           .reduce((a, b) => a < b ? a : b);
       for (int i = 0; i < n; i++) {
-        flightTimes[timedDayIndices[i]] = (
-          checkIn: checkInRow[i],
-          checkOut: checkOutRow[i],
-        );
+        if (!flightTimes.containsKey(timedDayIndices[i])) {
+          flightTimes[timedDayIndices[i]] = (
+            checkIn: checkInRow[i],
+            checkOut: checkOutRow[i],
+          );
+        }
       }
     }
 
@@ -718,12 +720,14 @@ class RosterParser {
       }
     }
 
-    // Fallback: flat-list STA mapping
-    if (flightArrivalTimes.isEmpty && timeRows.length >= 3 && flightDayIndices.isNotEmpty) {
+    // Fallback: flat-list STA mapping supplements any days tab mapping missed
+    if (timeRows.length >= 3 && flightDayIndices.isNotEmpty) {
       final staRow = timeRows[2];
       final n = [staRow.length, flightDayIndices.length].reduce((a, b) => a < b ? a : b);
       for (int i = 0; i < n; i++) {
-        flightArrivalTimes[flightDayIndices[i]] = staRow[i];
+        if (!flightArrivalTimes.containsKey(flightDayIndices[i])) {
+          flightArrivalTimes[flightDayIndices[i]] = staRow[i];
+        }
       }
     }
 
@@ -990,6 +994,12 @@ class RosterParser {
     }
 
     // Store debug info
+    debugSb.writeln('colToDayIdx: ${colToDayIdx.length} columns mapped');
+    if (colToDayIdx.isNotEmpty) {
+      final daysMapped = colToDayIdx.values.toSet();
+      debugSb.writeln('  Days covered: ${daysMapped.length} (${daysMapped.toList()..sort()})');
+      debugSb.writeln('  Date row tabs: ${dateTabCells.length} cells');
+    }
     debugSb.writeln('Airport rows found: ${airportRows.length}');
     for (int r = 0; r < airportRows.length; r++) {
       debugSb.writeln('  Row $r (${airportRows[r].length}): ${airportRows[r].join(" ")}');
