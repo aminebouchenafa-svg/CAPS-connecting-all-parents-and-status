@@ -121,7 +121,7 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
     for (final key in sortedKeys) {
       final cells = rows[key]!..sort((a, b) => a.x.compareTo(b.x));
 
-      if (colPositions != null && cells.length >= 3) {
+      if (colPositions != null && cells.length >= 1) {
         final aligned = List<String>.filled(colPositions.length, '');
         for (final cell in cells) {
           int bestCol = 0;

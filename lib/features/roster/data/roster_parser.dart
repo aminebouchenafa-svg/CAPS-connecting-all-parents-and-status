@@ -54,16 +54,27 @@ class RosterParser {
     'DOH': 'Doha',
     'JED': 'Djeddah',
     'MED': 'Médine',
+    'LIS': 'Lisbonne',
+    'ATH': 'Athènes',
+    'VIE': 'Vienne',
+    'ZRH': 'Zurich',
+    'MLH': 'Mulhouse',
+    'NTE': 'Nantes',
+    'TLS': 'Toulouse',
+    'NCE': 'Nice',
+    'BOD': 'Bordeaux',
+    'MPL': 'Montpellier',
   };
 
   static const _avioDevCodes = {
     '/', '/RH', '//', 'RH', 'OFF', 'DO', 'JA',
-    'ESIM', 'ING1', 'ING2', 'ING3', 'ING4', 'ING5',
+    'ESIM', 'ISIM', 'ING1', 'ING2', 'ING3', 'ING4', 'ING5',
     'ARRT', 'DEPL', 'ABS', 'HS', 'INST', 'C/O',
     'SBY', 'STBY', 'STANDBY', 'REPOS', 'REST',
     'CGET', 'GRTS', 'ESTG', 'ENG2', 'ESSP', '#',
     'ENG1', 'ENG3', 'ENG4', 'ENG5',
     'ELRN', 'BFGS', 'BFGE', 'CONV',
+    'EDGR', 'STGE', '-->', 'LVO',
   };
 
   String? lastExtractedText;
@@ -151,10 +162,10 @@ class RosterParser {
     final month = periodStart.month;
     final daysInMonth = DateTime(year, month + 1, 0).day;
 
-    var duties = _trySequentialParse(text, year, month, daysInMonth);
+    var duties = _tryGridParse(text, year, month, daysInMonth);
 
     if (duties.isEmpty) {
-      duties = _tryGridParse(text, year, month, daysInMonth);
+      duties = _trySequentialParse(text, year, month, daysInMonth);
     }
 
     if (duties.isEmpty) {
@@ -565,7 +576,6 @@ class RosterParser {
       if (act == null) continue;
       final upper = act.toUpperCase();
       if (_noTimeCodes.contains(upper)) continue;
-      if (outstationDayIndices.contains(di)) continue;
       timedDayIndices.add(di);
     }
 
@@ -1030,6 +1040,16 @@ class RosterParser {
       return duties;
     }
 
+    if (flightNums.isEmpty && airports.length == 1) {
+      duties.add(RosterDuty(
+        date: DateTime(year, month, day),
+        type: DutyType.rest,
+        activityCode: airports[0],
+        notes: 'Escale ${airportNames[airports[0]] ?? airports[0]}',
+      ));
+      return duties;
+    }
+
     for (int i = 0; i < flightNums.length; i++) {
       duties.add(RosterDuty(
         date: DateTime(year, month, day),
@@ -1256,7 +1276,17 @@ class RosterParser {
       }
     }
 
-    // Fallback: use grid parser for any still-missing days
+    // Fallback: use sequential parser for any still-missing days
+    if (coveredDays.length < daysInMonth) {
+      final fallbackDuties = _trySequentialParse(text, year, month, daysInMonth);
+      for (final fd in fallbackDuties) {
+        if (!coveredDays.contains(fd.date.day)) {
+          duties.add(fd);
+          coveredDays.add(fd.date.day);
+        }
+      }
+    }
+    // Final fallback: grid parser for anything still missing
     if (coveredDays.length < daysInMonth) {
       final gridDuties = _tryGridParse(text, year, month, daysInMonth);
       for (final gd in gridDuties) {
@@ -1282,11 +1312,13 @@ class RosterParser {
          'ENG1', 'ENG2', 'ENG3', 'ENG4', 'ENG5'].contains(code)) {
       return DutyType.training;
     }
-    if (['GRTS', 'ESTG', 'ESSP', 'ELRN', 'BFGS', 'BFGE', 'CONV'].contains(code)) {
+    if (['ISIM'].contains(code)) return DutyType.simulator;
+    if (['GRTS', 'ESTG', 'ESSP', 'ELRN', 'BFGS', 'BFGE', 'CONV',
+         'STGE', 'EDGR', 'LVO'].contains(code)) {
       return DutyType.training;
     }
     if (['SBY', 'STBY', 'STANDBY', 'HS'].contains(code)) return DutyType.standby;
-    if (['ARRT', 'DEPL'].contains(code)) return DutyType.deadhead;
+    if (['ARRT', 'DEPL', '-->'].contains(code)) return DutyType.deadhead;
     if (['CGET'].contains(code)) return DutyType.off;
     if (['ABS', 'C/O', 'REPOS', 'REST'].contains(code)) {
       return DutyType.rest;
@@ -1320,6 +1352,11 @@ class RosterParser {
       'BFGS' => 'Briefing simulateur',
       'BFGE' => 'Briefing Élève',
       'CONV' => 'Conversion',
+      'ISIM' => 'Simulateur Instructeur',
+      'STGE' => 'Stage',
+      'EDGR' => 'E-learning DGR',
+      '-->' => 'Mise en place',
+      'LVO' => 'Low Visibility Operations',
       'ARRT' => 'Arrivée tardive',
       'DEPL' => 'Mission',
       'ABS' => 'Absence',
@@ -1340,7 +1377,7 @@ class RosterParser {
   DutyType _codeToType(String code) => _avioDevType(code.toUpperCase());
 
   String? _extractFlightNum(String token) {
-    final match = RegExp(r'^(?:AH\s*)?(\d{3,4})$').firstMatch(token);
+    final match = RegExp(r'^(?:AH\s*)?(\d{3,4})[A-Z]?$').firstMatch(token);
     if (match != null) {
       final num = int.tryParse(match.group(1)!);
       if (num != null && num >= 100) {
