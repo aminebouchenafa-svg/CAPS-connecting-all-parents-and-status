@@ -518,7 +518,11 @@ class RosterParser {
       }
     }
 
-    // Step 5b: Build column-to-day mapping from date row tab structure
+    // Step 5b: Build column-to-day mapping from date row tab structure.
+    // The date row may be "01\tMar\t02\tMar\t..." (separate number/month
+    // columns) or "01 Mar\t02 Mar\t..." (merged). We first map day-number
+    // columns, then fill gaps so adjacent month-name columns also map to
+    // the same day - data cells can align to either position.
     final dateTabCells = lines[dateRowIdx].split('\t');
     final colToDayIdx = <int, int>{};
     final dayNumToIdx = <int, int>{};
@@ -539,29 +543,57 @@ class RosterParser {
         }
       }
     }
+    // Fill gaps: columns between two day-number columns belong to the
+    // preceding day (e.g. the "Mar" column after "01" belongs to day 1)
+    if (colToDayIdx.length >= 2) {
+      final sortedCols = colToDayIdx.keys.toList()..sort();
+      for (int i = 0; i < sortedCols.length; i++) {
+        final col = sortedCols[i];
+        final dayIdx = colToDayIdx[col]!;
+        final nextCol = i + 1 < sortedCols.length
+            ? sortedCols[i + 1]
+            : dateTabCells.length;
+        for (int c = col + 1; c < nextCol; c++) {
+          colToDayIdx[c] = dayIdx;
+        }
+      }
+    }
 
     // Step 6: Map airport pairs to flight days.
     final nFlights = flightDayIndices.length;
     final flightRoutes = <int, ({String dep, String arr})>{};
 
     // Primary: tab-based column mapping (eliminates alignment bugs)
+    // Collect dep and arr independently per day since they may be at
+    // different column offsets within the same day range.
     if (colToDayIdx.isNotEmpty && airportRawLines.length >= 2) {
       final depTabs = airportRawLines[0].split('\t');
       final arrTabs = airportRawLines[1].split('\t');
+      final dayDep = <int, String>{};
+      final dayArr = <int, String>{};
 
       for (final entry in colToDayIdx.entries) {
         final col = entry.key;
         final dayIdx = entry.value;
         if (!flightDayIndices.contains(dayIdx)) continue;
 
-        final dep = col < depTabs.length
-            ? depTabs[col].trim().toUpperCase().replaceAll('*', '') : '';
-        final arr = col < arrTabs.length
-            ? arrTabs[col].trim().toUpperCase().replaceAll('*', '') : '';
+        if (!dayDep.containsKey(dayIdx) && col < depTabs.length) {
+          final dep = depTabs[col].trim().toUpperCase().replaceAll('*', '');
+          if (dep.isNotEmpty && RegExp(r'^[A-Z]{3}$').hasMatch(dep)) {
+            dayDep[dayIdx] = dep;
+          }
+        }
+        if (!dayArr.containsKey(dayIdx) && col < arrTabs.length) {
+          final arr = arrTabs[col].trim().toUpperCase().replaceAll('*', '');
+          if (arr.isNotEmpty && RegExp(r'^[A-Z]{3}$').hasMatch(arr)) {
+            dayArr[dayIdx] = arr;
+          }
+        }
+      }
 
-        if (dep.isNotEmpty && RegExp(r'^[A-Z]{3}$').hasMatch(dep) &&
-            arr.isNotEmpty && RegExp(r'^[A-Z]{3}$').hasMatch(arr)) {
-          flightRoutes[dayIdx] = (dep: dep, arr: arr);
+      for (final dayIdx in dayDep.keys) {
+        if (dayArr.containsKey(dayIdx)) {
+          flightRoutes[dayIdx] = (dep: dayDep[dayIdx]!, arr: dayArr[dayIdx]!);
         }
       }
     }
@@ -625,18 +657,31 @@ class RosterParser {
     if (colToDayIdx.isNotEmpty && timeRawLines.length >= 2) {
       final checkInTabs = timeRawLines[0].split('\t');
       final checkOutTabs = timeRawLines[1].split('\t');
+      final dayCi = <int, String>{};
+      final dayCo = <int, String>{};
 
       for (final entry in colToDayIdx.entries) {
         final col = entry.key;
         final dayIdx = entry.value;
         if (!timedDayIndices.contains(dayIdx)) continue;
 
-        final ci = col < checkInTabs.length ? checkInTabs[col].trim() : '';
-        final co = col < checkOutTabs.length ? checkOutTabs[col].trim() : '';
+        if (!dayCi.containsKey(dayIdx) && col < checkInTabs.length) {
+          final ci = checkInTabs[col].trim();
+          if (ci.isNotEmpty && _timePattern.hasMatch(ci)) {
+            dayCi[dayIdx] = ci;
+          }
+        }
+        if (!dayCo.containsKey(dayIdx) && col < checkOutTabs.length) {
+          final co = checkOutTabs[col].trim();
+          if (co.isNotEmpty && _timePattern.hasMatch(co)) {
+            dayCo[dayIdx] = co;
+          }
+        }
+      }
 
-        if (ci.isNotEmpty && _timePattern.hasMatch(ci) &&
-            co.isNotEmpty && _timePattern.hasMatch(co)) {
-          flightTimes[dayIdx] = (checkIn: ci, checkOut: co);
+      for (final dayIdx in dayCi.keys) {
+        if (dayCo.containsKey(dayIdx)) {
+          flightTimes[dayIdx] = (checkIn: dayCi[dayIdx]!, checkOut: dayCo[dayIdx]!);
         }
       }
     }
@@ -665,6 +710,7 @@ class RosterParser {
         final col = entry.key;
         final dayIdx = entry.value;
         if (!flightDayIndices.contains(dayIdx)) continue;
+        if (flightArrivalTimes.containsKey(dayIdx)) continue;
         final sta = col < staTabs.length ? staTabs[col].trim() : '';
         if (sta.isNotEmpty && _timePattern.hasMatch(sta)) {
           flightArrivalTimes[dayIdx] = sta;
@@ -715,32 +761,44 @@ class RosterParser {
       for (int tier = 1; tier * 2 + 1 < airportRawLines.length; tier++) {
         final depTabs = airportRawLines[tier * 2].split('\t');
         final arrTabs = airportRawLines[tier * 2 + 1].split('\t');
-
-        // Find extra flight numbers via tab mapping too
         final fnTabs = tier - 1 < extraFlightRawLines.length
             ? extraFlightRawLines[tier - 1].split('\t') : <String>[];
+
+        final tierDep = <int, String>{};
+        final tierArr = <int, String>{};
+        final tierFn = <int, String>{};
 
         for (final entry in colToDayIdx.entries) {
           final col = entry.key;
           final dayIdx = entry.value;
           if (!flightDayIndices.contains(dayIdx)) continue;
 
-          final dep = col < depTabs.length
-              ? depTabs[col].trim().toUpperCase().replaceAll('*', '') : '';
-          final arr = col < arrTabs.length
-              ? arrTabs[col].trim().toUpperCase().replaceAll('*', '') : '';
-
-          if (dep.isEmpty || !RegExp(r'^[A-Z]{3}$').hasMatch(dep)) continue;
-          if (arr.isEmpty || !RegExp(r'^[A-Z]{3}$').hasMatch(arr)) continue;
-
-          String fn = 'AH ???';
-          if (col < fnTabs.length) {
-            final extracted = _extractFlightNum(fnTabs[col].trim().toUpperCase());
-            if (extracted != null) fn = extracted;
+          if (!tierDep.containsKey(dayIdx) && col < depTabs.length) {
+            final dep = depTabs[col].trim().toUpperCase().replaceAll('*', '');
+            if (dep.isNotEmpty && RegExp(r'^[A-Z]{3}$').hasMatch(dep)) {
+              tierDep[dayIdx] = dep;
+            }
           }
+          if (!tierArr.containsKey(dayIdx) && col < arrTabs.length) {
+            final arr = arrTabs[col].trim().toUpperCase().replaceAll('*', '');
+            if (arr.isNotEmpty && RegExp(r'^[A-Z]{3}$').hasMatch(arr)) {
+              tierArr[dayIdx] = arr;
+            }
+          }
+          if (!tierFn.containsKey(dayIdx) && col < fnTabs.length) {
+            final extracted = _extractFlightNum(fnTabs[col].trim().toUpperCase());
+            if (extracted != null) tierFn[dayIdx] = extracted;
+          }
+        }
 
+        for (final dayIdx in tierDep.keys) {
+          if (!tierArr.containsKey(dayIdx)) continue;
           extraLegs.putIfAbsent(dayIdx, () => []);
-          extraLegs[dayIdx]!.add((fn: fn, dep: dep, arr: arr));
+          extraLegs[dayIdx]!.add((
+            fn: tierFn[dayIdx] ?? 'AH ???',
+            dep: tierDep[dayIdx]!,
+            arr: tierArr[dayIdx]!,
+          ));
         }
       }
     }
