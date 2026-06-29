@@ -222,6 +222,17 @@ class RosterParser {
       return 0;
     });
 
+    // Deduplicate: remove duplicate flights on the same date with the same
+    // flight number. Keep the entry with the most complete data.
+    final seen = <String>{};
+    duties.removeWhere((d) {
+      if (!d.isFlight || d.flightNumber == null) return false;
+      final key = '${d.date.year}-${d.date.month}-${d.date.day}_${d.flightNumber}';
+      if (seen.contains(key)) return true;
+      seen.add(key);
+      return false;
+    });
+
     return duties;
   }
 
@@ -316,6 +327,8 @@ class RosterParser {
       return c;
     }
 
+    final consumedLineIndices = <int>{};
+
     if (_countNonSkip(rawTokens) < dayDates.length) {
       for (int i = activityRowIdx + 1; i < lines.length && i < activityRowIdx + 5; i++) {
         if (_countNonSkip(rawTokens) >= dayDates.length) break;
@@ -327,12 +340,27 @@ class RosterParser {
         if (lower.contains('block hours') || lower.contains('duty hours') ||
             lower.contains('code explanations') || lower.contains('totals') ||
             RegExp(r'page\s+\d').hasMatch(lower)) break;
-        final actCount = tokens.where((t) {
+
+        // Count activity codes vs flight numbers separately.
+        // If line is mostly flight numbers, it's likely an extra flight row
+        // for 2nd+ legs — do NOT merge it into the activity row.
+        int codeCount = 0;
+        int fnCount = 0;
+        for (final t in tokens) {
           final upper = t.toUpperCase();
-          return _avioDevCodes.contains(upper) || _extractFlightNum(upper) != null;
-        }).length;
-        if (actCount >= 1) {
+          if (_avioDevCodes.contains(upper)) {
+            codeCount++;
+          } else if (_extractFlightNum(upper) != null) {
+            fnCount++;
+          }
+        }
+        if (fnCount > 0 && fnCount >= codeCount && codeCount == 0) {
+          // Line has only flight numbers, no activity codes — skip it
+          continue;
+        }
+        if (codeCount + fnCount >= 1) {
           rawTokens = [...rawTokens, ...tokens];
+          consumedLineIndices.add(i);
         }
       }
     }
@@ -414,6 +442,7 @@ class RosterParser {
     // Debug: store the parsed mapping for troubleshooting
     final debugSb = StringBuffer();
     debugSb.writeln('=== SEQUENTIAL PARSER DEBUG ===');
+    debugSb.writeln('Consumed continuation lines: ${consumedLineIndices.length} (indices: $consumedLineIndices)');
     debugSb.writeln('Raw tokens (${rawTokens.length}): ${rawTokens.join(" | ")}');
     debugSb.writeln('After /RH merge (${step1Tokens.length}): ${step1Tokens.join(" | ")}');
     debugSb.writeln('Final tokens (${actTokens.length}): ${actTokens.join(" | ")}');
@@ -430,10 +459,12 @@ class RosterParser {
     }
 
     // Step 4: Collect data lines between activity row and stats section.
-    // Skip duplicate partial activity rows (PDF extraction artifact).
+    // Skip lines already consumed by activity row continuation and
+    // duplicate partial activity rows (PDF extraction artifact).
     final actRowText = lines[activityRowIdx].trim();
     final dataLines = <String>[];
     for (int i = activityRowIdx + 1; i < lines.length; i++) {
+      if (consumedLineIndices.contains(i)) continue;
       final line = lines[i].trim();
       if (line.isEmpty) continue;
       final lower = line.toLowerCase();
@@ -564,11 +595,15 @@ class RosterParser {
     }
 
     // Step 8: Extract extra flight rows (2nd legs, 3rd legs, etc.)
+    // Use a low threshold (>= 1 flight number) but filter out lines already
+    // identified as airport rows or time rows by checking overlap.
     final extraFlightRows = <List<String>>[];
     for (final dl in dataLines) {
       final tokens = dl.split(RegExp(r'\s+'));
-      if (tokens.length < 3) continue;
+      if (tokens.isEmpty) continue;
       int fnCount = 0;
+      int aptCount = 0;
+      int timeCount = 0;
       final fns = <String>[];
       for (final t in tokens) {
         final fn = _extractFlightNum(t.toUpperCase());
@@ -576,8 +611,13 @@ class RosterParser {
           fnCount++;
           fns.add(fn);
         }
+        if (_airportPattern.hasMatch(t.toUpperCase())) aptCount++;
+        if (_timePattern.hasMatch(t)) timeCount++;
       }
-      if (fnCount >= 3 && fnCount > tokens.length * 0.5) {
+      // Skip lines that are airport rows or time rows
+      if (aptCount > fnCount || timeCount > fnCount) continue;
+      // Accept if at least 1 flight number and flight numbers dominate
+      if (fnCount >= 1 && fnCount >= tokens.length * 0.4) {
         extraFlightRows.add(fns);
       }
     }
@@ -622,6 +662,43 @@ class RosterParser {
             extraLegs.putIfAbsent(fi, () => []);
             extraLegs[fi]!.add((fn: row[i], dep: dN, arr: aN));
             break;
+          }
+        }
+      }
+    }
+
+    // Fallback: detect extra legs from airport row pairs when no extra
+    // flight rows were found. If we have 4+ airport rows, rows [2,3] are
+    // dep/arr for 2nd legs. Match by route continuity (arr1 == dep2).
+    if (extraLegs.isEmpty && airportRows.length >= 4) {
+      for (int tier = 1; tier * 2 + 1 < airportRows.length; tier++) {
+        final depRow = airportRows[tier * 2];
+        final arrRow = airportRows[tier * 2 + 1];
+        final n = [depRow.length, arrRow.length].reduce((a, b) => a < b ? a : b);
+
+        int matchIdx = 0;
+        for (final fi in flightDayIndices) {
+          if (matchIdx >= n) break;
+
+          String? prevArr;
+          if (tier == 1) {
+            prevArr = flightRoutes[fi]?.arr;
+          } else {
+            final legs = extraLegs[fi];
+            if (legs != null && legs.length >= tier - 1) {
+              prevArr = legs[tier - 2].arr;
+            }
+          }
+
+          if (prevArr != null && prevArr == depRow[matchIdx]) {
+            extraLegs.putIfAbsent(fi, () => []);
+            // Use flight number from extra flight rows if available
+            final fn = tier - 1 < extraFlightRows.length &&
+                    matchIdx < extraFlightRows[tier - 1].length
+                ? extraFlightRows[tier - 1][matchIdx]
+                : 'AH ???';
+            extraLegs[fi]!.add((fn: fn, dep: depRow[matchIdx], arr: arrRow[matchIdx]));
+            matchIdx++;
           }
         }
       }
