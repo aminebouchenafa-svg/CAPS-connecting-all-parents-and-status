@@ -1058,15 +1058,27 @@ class RosterParser {
   // ── Strategy 1: Grid (column-aligned tab-separated from AvioDev PDF) ──
 
   int? _dayFromCell(String cell) {
-    if (cell.isEmpty) return null;
-    if (cell.contains(':')) return null;
-    final match = RegExp(r'^(\d{1,2})').firstMatch(cell);
-    if (match == null) return null;
-    final d = int.tryParse(match.group(1)!);
-    if (d == null || d < 1 || d > 31) return null;
-    final rest = cell.substring(match.end).trim();
-    if (rest.isNotEmpty && RegExp(r'^\d').hasMatch(rest)) return null;
-    return d;
+    final trimmed = cell.trim();
+    if (trimmed.isEmpty) return null;
+
+    if (RegExp(r'^\d{1,2}$').hasMatch(trimmed)) {
+      final d = int.parse(trimmed);
+      if (d >= 1 && d <= 31) return d;
+    }
+
+    final m1 = RegExp(r'^(\d{1,2})\s+[A-Za-z]{2,3}$').firstMatch(trimmed);
+    if (m1 != null) {
+      final d = int.parse(m1.group(1)!);
+      if (d >= 1 && d <= 31) return d;
+    }
+
+    final m2 = RegExp(r'^[A-Za-z]{2,3}\s+(\d{1,2})$').firstMatch(trimmed);
+    if (m2 != null) {
+      final d = int.parse(m2.group(1)!);
+      if (d >= 1 && d <= 31) return d;
+    }
+
+    return null;
   }
 
   List<RosterDuty> _tryGridParse(

@@ -37,29 +37,16 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
         );
         for (final line in lines) {
           if (line.text.trim().isEmpty) continue;
-
           final y = line.bounds.top + page * 10000;
-
-          // Use word-level bounds from PDF for exact x positions.
-          // Each TextWord has its own bounding rectangle from the PDF,
-          // giving precise column alignment.
           final words = line.wordCollection;
           if (words.isNotEmpty) {
             for (final word in words) {
               final text = word.text.trim();
               if (text.isEmpty) continue;
-              allCells.add((
-                x: word.bounds.left,
-                y: y,
-                text: text,
-              ));
+              allCells.add((x: word.bounds.left, y: y, text: text));
             }
           } else {
-            allCells.add((
-              x: line.bounds.left,
-              y: y,
-              text: line.text.trim(),
-            ));
+            allCells.add((x: line.bounds.left, y: y, text: line.text.trim()));
           }
         }
       } catch (_) {
@@ -77,69 +64,108 @@ class _RosterUploadWidgetState extends ConsumerState<RosterUploadWidget> {
     document.dispose();
     if (allCells.isEmpty) return '';
 
-    // Group by Y position (8px tolerance for grid row alignment)
     final rows = <int, List<({double x, String text})>>{};
     for (final cell in allCells) {
       final yKey = (cell.y / 8).round();
       rows.putIfAbsent(yKey, () => []);
       rows[yKey]!.add((x: cell.x, text: cell.text));
     }
-
     final sortedKeys = rows.keys.toList()..sort();
 
-    // Find column positions from the best grid row (prefer rows with day numbers)
-    List<double>? colPositions;
-    int bestScore = 0;
+    // Find the day-number row: standalone numbers 1-31 in left-to-right order
+    Map<int, double>? dayPositions;
+    int bestDayCount = 0;
+
     for (final key in sortedKeys) {
       final rowCells = rows[key]!;
-      if (rowCells.length < 15) continue;
-      int dayCount = 0;
+      if (rowCells.length < 10) continue;
+
+      final candidates = <int, double>{};
       for (final cell in rowCells) {
-        final m = RegExp(r'^(\d{1,2})\b').firstMatch(cell.text.trim());
-        if (m != null) {
-          final d = int.tryParse(m.group(1)!);
-          if (d != null && d >= 1 && d <= 31) dayCount++;
+        final trimmed = cell.text.trim();
+        if (!RegExp(r'^\d{1,2}$').hasMatch(trimmed)) continue;
+        final d = int.parse(trimmed);
+        if (d >= 1 && d <= 31 && !candidates.containsKey(d)) {
+          candidates[d] = cell.x;
         }
       }
-      final score = dayCount * 100 + rowCells.length;
-      if (score > bestScore) {
-        bestScore = score;
-        final sorted = List.of(rowCells)
-          ..sort((a, b) => a.x.compareTo(b.x));
-        colPositions = sorted.map((c) => c.x).toList();
+
+      if (candidates.length <= bestDayCount || candidates.length < 10) continue;
+
+      final sorted = candidates.entries.toList()
+        ..sort((a, b) => a.value.compareTo(b.value));
+      bool ordered = true;
+      for (int i = 1; i < sorted.length; i++) {
+        if (sorted[i].key <= sorted[i - 1].key) {
+          ordered = false;
+          break;
+        }
       }
+      if (ordered) {
+        bestDayCount = candidates.length;
+        dayPositions = candidates;
+      }
+    }
+
+    if (dayPositions != null && dayPositions.length >= 10) {
+      final sortedDays = dayPositions.entries.toList()
+        ..sort((a, b) => a.value.compareTo(b.value));
+
+      final avgGap = (sortedDays.last.value - sortedDays.first.value) /
+          (sortedDays.length - 1);
+
+      final colBounds = <({int day, double left, double right})>[];
+      for (int i = 0; i < sortedDays.length; i++) {
+        final x = sortedDays[i].value;
+        colBounds.add((
+          day: sortedDays[i].key,
+          left: (i == 0)
+              ? (x - avgGap / 2)
+              : (sortedDays[i - 1].value + x) / 2,
+          right: (i == sortedDays.length - 1)
+              ? double.infinity
+              : (x + sortedDays[i + 1].value) / 2,
+        ));
+      }
+
+      final sb = StringBuffer();
+      for (final key in sortedKeys) {
+        final cells = rows[key]!..sort((a, b) => a.x.compareTo(b.x));
+
+        final preCol = <String>[];
+        final dayContent = <int, List<String>>{};
+
+        for (final cell in cells) {
+          int? assignedDay;
+          for (final col in colBounds) {
+            if (cell.x >= col.left && cell.x < col.right) {
+              assignedDay = col.day;
+              break;
+            }
+          }
+          if (assignedDay != null) {
+            dayContent.putIfAbsent(assignedDay, () => []);
+            dayContent[assignedDay]!.add(cell.text);
+          } else {
+            preCol.add(cell.text);
+          }
+        }
+
+        final parts = <String>[preCol.join(' ')];
+        for (final entry in sortedDays) {
+          parts.add((dayContent[entry.key] ?? []).join(' '));
+        }
+        sb.writeln(parts.join('\t'));
+      }
+
+      return sb.toString();
     }
 
     final sb = StringBuffer();
     for (final key in sortedKeys) {
       final cells = rows[key]!..sort((a, b) => a.x.compareTo(b.x));
-
-      if (colPositions != null && cells.length >= 1) {
-        final aligned = List<String>.filled(colPositions.length, '');
-        for (final cell in cells) {
-          int bestCol = 0;
-          double bestDist = double.infinity;
-          for (int i = 0; i < colPositions.length; i++) {
-            final dist = (cell.x - colPositions[i]).abs();
-            if (dist < bestDist) {
-              bestDist = dist;
-              bestCol = i;
-            }
-          }
-          if (bestDist < 40) {
-            if (aligned[bestCol].isEmpty) {
-              aligned[bestCol] = cell.text;
-            } else {
-              aligned[bestCol] += ' ${cell.text}';
-            }
-          }
-        }
-        sb.writeln(aligned.join('\t'));
-      } else {
-        sb.writeln(cells.map((c) => c.text).join('\t'));
-      }
+      sb.writeln(cells.map((c) => c.text).join('\t'));
     }
-
     return sb.toString();
   }
 
